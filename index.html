@@ -18,13 +18,12 @@
       <div class="navbar-left">
         <button class="navbar-btn" @click="showDrawer = true">☰</button>
         <img v-if="activeChar && activeChar.avatar" :src="activeChar.avatar" class="nav-avatar" />
-        <span v-else class="app-icon" style="width:34px;height:34px;">🤖</span>
+        <span v-else class="app-icon" style="width:34px;height:34px;">AI</span>
         <div class="nav-titles">
           <span class="app-title">{{ activeChar ? activeChar.name : 'AI Chat' }}</span>
         </div>
       </div>
       <div class="navbar-right">
-        <span class="status-badge" :class="apiConfigured ? 'online' : 'offline'">{{ apiConfigured ? '已连接' : '未配置' }}</span>
         <button class="navbar-btn" @click="openSettings">⚙️</button>
       </div>
     </header>
@@ -47,8 +46,8 @@
                 <div v-if="editingMessageId === item.id" class="edit-container">
                   <textarea v-model="editingContent" class="edit-textarea" rows="3"></textarea>
                   <div class="edit-actions">
-                    <button @click="saveEdit(item)" class="edit-save-btn">✅ 保存</button>
-                    <button @click="cancelEdit" class="edit-cancel-btn">❌ 取消</button>
+                    <button @click="saveEdit(item)" class="edit-save-btn">保存</button>
+                    <button @click="cancelEdit" class="edit-cancel-btn">取消</button>
                   </div>
                 </div>
                 <div v-else class="msg-text">{{ Store.currentContent(item) }}</div>
@@ -69,7 +68,6 @@
       </div>
 
       <div v-if="!activeStoryline || activeStoryline.messages.length === 0 && !isTyping" class="chat-empty">
-        <div class="empty-icon">💬</div>
         <div style="font-weight:500; font-size:17px;">{{ activeChar ? '和 ' + activeChar.name + ' 开始聊天' : '开始你的 AI 陪伴之旅' }}</div>
         <div class="empty-sub">{{ apiConfigured ? '发送第一条消息，或新建故事线' : '配置好 API 后即可开始' }}</div>
         <button class="btn-go-setting" @click="openSettings">⚙️ 去设置</button>
@@ -78,15 +76,15 @@
 
     <div class="input-area">
       <textarea v-model="inputMessage" @input="autoResizeTextarea" placeholder="输入消息..." rows="1" ref="inputTextarea" :disabled="isSending || !apiConfigured"></textarea>
-      <button class="btn-send" @click="sendMessage" :disabled="isSending || !apiConfigured">{{ isSending ? '⏳' : '➤' }}</button>
+      <button class="btn-send" @click="sendMessage" :disabled="isSending || !apiConfigured">{{ isSending ? '…' : '→' }}</button>
     </div>
 
     <div v-if="showMessageMenu" class="message-menu" :style="{ left: menuPosition.x + 'px', top: menuPosition.y + 'px' }" @click.stop>
-      <div class="menu-item" v-if="canEditTarget" @click="startEdit(targetMessage)">✏️ 编辑</div>
-      <div class="menu-item" v-if="canReReplyTarget" @click="reReply">🔄 重新回复</div>
-      <div class="menu-item" @click="branchFromHere">🆕 从此处开始新聊天</div>
-      <div class="menu-item" @click="deleteAfterThis">↩️ 退回到此处</div>
-      <div class="menu-item" @click="deleteMessage">🗑️ 删除</div>
+      <div class="menu-item" v-if="canEditTarget" @click="startEdit(targetMessage)">编辑</div>
+      <div class="menu-item" v-if="canReReplyTarget" @click="reReply">重新回复</div>
+      <div class="menu-item" @click="branchFromHere">从此处开始新聊天</div>
+      <div class="menu-item" @click="deleteAfterThis">退回到此处</div>
+      <div class="menu-item" @click="deleteMessage">删除</div>
     </div>
     <div v-if="showToast" class="toast">{{ toastMessage }}</div>
 
@@ -97,7 +95,7 @@
         <div v-for="c in state.characters" :key="c.id">
           <div class="drawer-item" :class="{ active: c.id === state.activeCharacterId }" @click="selectCharacter(c.id)">
             <img v-if="c.avatar" :src="c.avatar" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" />
-            <span v-else>🤖</span>
+            <span v-else style="width:32px;"></span>
             <span class="name">{{ c.name }}</span>
           </div>
           <div v-if="c.id === state.activeCharacterId" style="padding-left: 16px;">
@@ -107,7 +105,7 @@
                 <input class="storyline-rename-input" v-model="s.name" @blur="renameStoryline(s)" @keyup.enter="renameStoryline(s)" @click.stop />
               </template>
               <template v-else>
-                <span class="name">📜 {{ s.name }}</span>
+                <span class="name">{{ s.name }}</span>
                 <button class="storyline-rename-btn" @click.stop="editingStorylineId = s.id">✏️</button>
               </template>
             </div>
@@ -125,12 +123,12 @@
         <div class="settings-header"><button class="back-btn" @click="showSettings = false">‹</button><h2>设置</h2><span style="width:40px;"></span></div>
         <div class="settings-body">
           <div class="settings-list">
-            <div class="settings-list-item" @click="settingsView = 'api'"><span class="item-label">🔌 API接入</span><span class="item-arrow">›</span></div>
-            <div class="settings-list-item" @click="settingsView = 'characters'"><span class="item-label">🎭 角色管理</span><span class="item-arrow">›</span></div>
-            <div class="settings-list-item" @click="settingsView = 'worldbooks'"><span class="item-label">📖 世界书</span><span class="item-arrow">›</span></div>
-            <div class="settings-list-item" @click="settingsView = 'user'"><span class="item-label">👤 用户设定</span><span class="item-arrow">›</span></div>
-            <div class="settings-list-item" @click="settingsView = 'global'"><span class="item-label">⚙️ 全局设置</span><span class="item-arrow">›</span></div>
-            <div class="settings-list-item" @click="settingsView = 'data'"><span class="item-label">📦 数据</span><span class="item-arrow">›</span></div>
+            <div class="settings-list-item" @click="settingsView = 'api'"><span class="item-label">API接入</span><span class="item-arrow">›</span></div>
+            <div class="settings-list-item" @click="settingsView = 'characters'"><span class="item-label">角色管理</span><span class="item-arrow">›</span></div>
+            <div class="settings-list-item" @click="settingsView = 'worldbooks'"><span class="item-label">世界书</span><span class="item-arrow">›</span></div>
+            <div class="settings-list-item" @click="settingsView = 'user'"><span class="item-label">用户设定</span><span class="item-arrow">›</span></div>
+            <div class="settings-list-item" @click="settingsView = 'global'"><span class="item-label">全局设置</span><span class="item-arrow">›</span></div>
+            <div class="settings-list-item" @click="settingsView = 'data'"><span class="item-label">数据</span><span class="item-arrow">›</span></div>
           </div>
         </div>
       </template>
@@ -138,19 +136,19 @@
       <template v-if="settingsView === 'api'">
         <div class="settings-header"><button class="back-btn" @click="settingsView = 'home'">‹</button><h2>API接入</h2><span style="width:40px;"></span></div>
         <div class="settings-body">
-          <div class="form-group"><label>API 地址</label><input type="url" v-model="state.global.apiUrl" placeholder="https://api.openai.com/v1" /></div>
-          <div class="form-group"><label>API Key</label><input type="text" v-model="state.global.apiKey" placeholder="sk-..." autocomplete="off" /></div>
+          <div class="form-group"><label>API 地址</label><div class="expand-wrap"><input type="url" v-model="state.global.apiUrl" placeholder="https://api.openai.com/v1" /><button class="expand-btn" @click="openFullscreenFor(state.global, 'apiUrl', 'API 地址')">⤢</button></div></div>
+          <div class="form-group"><label>API Key</label><div class="expand-wrap"><input type="text" v-model="state.global.apiKey" placeholder="sk-..." autocomplete="off" /><button class="expand-btn" @click="openFullscreenFor(state.global, 'apiKey', 'API Key')">⤢</button></div></div>
           <div class="form-group"><label>模型</label>
             <div class="input-row">
-              <input type="text" v-model="state.global.model" list="modelList" placeholder="gpt-3.5-turbo" />
+              <div class="expand-wrap" style="flex:1;"><input type="text" v-model="state.global.model" list="modelList" placeholder="gpt-3.5-turbo" /><button class="expand-btn" @click="openFullscreenFor(state.global, 'model', '模型')">⤢</button></div>
               <datalist id="modelList"><option v-for="m in modelOptions" :key="m" :value="m" /></datalist>
-              <button class="btn-fetch" @click="fetchModels" :disabled="isFetchingModels">{{ isFetchingModels ? '⏳' : '🔄' }}</button>
+              <button class="btn-fetch" @click="fetchModels" :disabled="isFetchingModels">{{ isFetchingModels ? '…' : '刷新' }}</button>
             </div>
           </div>
           <div class="test-section">
             <div class="test-row">
-              <button class="btn-test" @click="runTest" :disabled="isTesting || !state.global.apiUrl || !state.global.apiKey">🧪 {{ isTesting ? '测试中...' : '测试连接' }}</button>
-              <div class="test-result" :class="testStatus"><span v-if="testStatus === 'idle'">⏳ 等待测试</span><span v-else-if="testStatus === 'success'">✅ 成功</span><span v-else-if="testStatus === 'error'">❌ 失败</span></div>
+              <button class="btn-test" @click="runTest" :disabled="isTesting || !state.global.apiUrl || !state.global.apiKey">{{ isTesting ? '测试中...' : '测试连接' }}</button>
+              <div class="test-result" :class="testStatus"><span v-if="testStatus === 'idle'">等待测试</span><span v-else-if="testStatus === 'success'">成功</span><span v-else-if="testStatus === 'error'">失败</span></div>
             </div>
             <div v-if="testDetail" class="test-detail">{{ testDetail }}</div>
           </div>
@@ -164,15 +162,11 @@
           <div class="form-group"><label>温度 <span class="label-hint">({{ state.global.temperature.toFixed(1) }})</span></label>
             <input type="range" min="0" max="2" step="0.1" v-model.number="state.global.temperature" style="width:100%;" />
           </div>
-          <div class="form-group"><label>回复长度 <span class="label-hint">(max_tokens)</span></label>
-            <select v-model.number="state.global.replyLength">
-              <option :value="200">简短 (~200)</option>
-              <option :value="500">中等 (~500)</option>
-              <option :value="1000">较长 (~1000)</option>
-            </select>
+          <div class="form-group"><label>回复长度 <span class="label-hint">({{ state.global.replyLength }})</span></label>
+            <input type="range" min="50" max="2000" step="50" v-model.number="state.global.replyLength" style="width:100%;" />
           </div>
           <div class="form-group"><label>全局注意事项</label>
-            <div class="textarea-wrapper"><textarea v-model="state.global.globalNotes" rows="4" placeholder="例如：必须用中文回复。"></textarea><button class="expand-btn" @click="openFullscreen('globalNotes')">⤢</button></div>
+            <div class="expand-wrap"><textarea v-model="state.global.globalNotes" rows="4" placeholder="例如：必须用中文回复。"></textarea><button class="expand-btn" @click="openFullscreenFor(state.global, 'globalNotes', '全局注意事项')">⤢</button></div>
           </div>
         </div>
         <div class="settings-footer"><button class="btn-cancel" @click="settingsView = 'home'">返回</button><button class="btn-save" @click="saveGlobal">保存</button></div>
@@ -184,12 +178,12 @@
           <div class="text-muted" style="margin-bottom:8px;">条目在最近 8 条消息中命中关键词/正则时注入；角色编辑页可选关联一本。</div>
           <div v-for="wb in state.global.worldBooks" :key="wb.id" class="wb-block">
             <div class="row" style="justify-content:space-between;margin-bottom:8px;">
-              <input type="text" v-model="wb.name" class="wb-name" />
+              <div class="expand-wrap" style="flex:1;"><input type="text" v-model="wb.name" class="wb-name" /><button class="expand-btn" @click="openFullscreenFor(wb, 'name', '世界书名称')">⤢</button></div>
               <button class="btn-danger" @click="deleteWorldBook(wb.id)">删除</button>
             </div>
             <div v-for="(e, i) in wb.entries" :key="e.id" class="wb-entry">
-              <div class="row"><label style="font-size:12px;">触发词/正则</label><input type="text" v-model="e.key" placeholder="关键词用逗号分隔，或正则" /></div>
-              <div class="row"><label style="font-size:12px;">内容</label><textarea v-model="e.content" rows="2"></textarea></div>
+              <div class="row"><label style="font-size:12px;">触发词/正则</label><div class="expand-wrap" style="flex:1;"><input type="text" v-model="e.key" placeholder="关键词用逗号分隔，或正则" /><button class="expand-btn" @click="openFullscreenFor(e, 'key', '触发词/正则')">⤢</button></div></div>
+              <div class="row"><label style="font-size:12px;">内容</label><div class="expand-wrap" style="flex:1;"><textarea v-model="e.content" rows="2"></textarea><button class="expand-btn" @click="openFullscreenFor(e, 'content', '内容')">⤢</button></div></div>
               <div class="row">
                 <label><input type="checkbox" v-model="e.isRegex" /> 正则</label>
                 <label><input type="checkbox" v-model="e.alwaysInclude" /> 恒插入</label>
@@ -208,7 +202,7 @@
       <template v-if="settingsView === 'user'">
         <div class="settings-header"><button class="back-btn" @click="settingsView = 'home'">‹</button><h2>用户设定</h2><span style="width:40px;"></span></div>
         <div class="settings-body">
-          <div class="form-group"><label>姓名</label><input type="text" v-model="state.global.userCard.name" placeholder="例：小明" /></div>
+          <div class="form-group"><label>姓名</label><div class="expand-wrap"><input type="text" v-model="state.global.userCard.name" placeholder="例：小明" /><button class="expand-btn" @click="openFullscreenFor(state.global.userCard, 'name', '姓名')">⤢</button></div></div>
           <div class="form-group"><label>用户头像</label>
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
               <img v-if="state.global.userCard.avatar" :src="state.global.userCard.avatar" style="width:60px;height:60px;border-radius:50%;object-fit:cover;" />
@@ -216,9 +210,9 @@
               <button v-if="state.global.userCard.avatar" @click="removeUserAvatar" style="background:none;border:none;color:#c0392b;font-size:20px;">✕</button>
             </div>
           </div>
-          <div class="form-group"><label>基本信息</label><textarea v-model="state.global.userCard.basic" rows="2"></textarea></div>
-          <div class="form-group"><label>性格</label><textarea v-model="state.global.userCard.personality" rows="2"></textarea></div>
-          <div class="form-group"><label>故事背景</label><textarea v-model="state.global.userCard.background" rows="3"></textarea></div>
+          <div class="form-group"><label>基本信息</label><div class="expand-wrap"><textarea v-model="state.global.userCard.basic" rows="2"></textarea><button class="expand-btn" @click="openFullscreenFor(state.global.userCard, 'basic', '基本信息')">⤢</button></div></div>
+          <div class="form-group"><label>性格</label><div class="expand-wrap"><textarea v-model="state.global.userCard.personality" rows="2"></textarea><button class="expand-btn" @click="openFullscreenFor(state.global.userCard, 'personality', '性格')">⤢</button></div></div>
+          <div class="form-group"><label>故事背景</label><div class="expand-wrap"><textarea v-model="state.global.userCard.background" rows="3"></textarea><button class="expand-btn" @click="openFullscreenFor(state.global.userCard, 'background', '故事背景')">⤢</button></div></div>
         </div>
         <div class="settings-footer"><button class="btn-cancel" @click="settingsView = 'home'">返回</button><button class="btn-save" @click="saveUser">保存</button></div>
       </template>
@@ -227,8 +221,8 @@
         <div class="settings-header"><button class="back-btn" @click="settingsView = 'home'">‹</button><h2>数据</h2><span style="width:40px;"></span></div>
         <div class="settings-body">
           <div class="settings-list">
-            <div class="settings-list-item" @click="exportData"><span class="item-label">📤 导出数据</span><span class="item-arrow">›</span></div>
-            <div class="settings-list-item" @click="importData"><span class="item-label">📥 导入数据</span><span class="item-arrow">›</span></div>
+            <div class="settings-list-item" @click="exportData"><span class="item-label">导出数据</span><span class="item-arrow">›</span></div>
+            <div class="settings-list-item" @click="importData"><span class="item-label">导入数据</span><span class="item-arrow">›</span></div>
           </div>
         </div>
       </template>
@@ -238,7 +232,7 @@
         <div class="settings-body">
           <div class="settings-list">
             <div v-for="c in state.characters" :key="c.id" class="settings-list-item" @click="openCharacterEdit(c.id)">
-              <span class="item-label">{{ c.avatar ? '🖼️ ' : '🤖 ' }}{{ c.name }}</span>
+              <span class="item-label">{{ c.name }}</span>
               <span class="item-arrow">›</span>
             </div>
             <div class="settings-list-item" @click="createCharacter"><span class="item-label" style="color:#075e54;">＋ 新增角色</span><span class="item-arrow"></span></div>
@@ -250,7 +244,7 @@
         <div class="settings-header"><button class="back-btn" @click="settingsView = 'characters'">‹</button><h2>{{ editingChar ? editingChar.name : '编辑角色' }}</h2><span style="width:40px;"></span></div>
         <div class="settings-body">
           <template v-if="editingChar">
-            <div class="form-group"><label>名称</label><input type="text" v-model="editingChar.name" /></div>
+            <div class="form-group"><label>名称</label><div class="expand-wrap"><input type="text" v-model="editingChar.name" /><button class="expand-btn" @click="openFullscreenFor(editingChar, 'name', '名称')">⤢</button></div></div>
             <div class="form-group"><label>头像</label>
               <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                 <img v-if="editingChar.avatar" :src="editingChar.avatar" style="width:60px;height:60px;border-radius:50%;object-fit:cover;" />
@@ -259,12 +253,12 @@
               </div>
             </div>
             <div class="form-group"><label>开场白 <span class="label-hint">(新故事线第一条消息)</span></label>
-              <div class="textarea-wrapper"><textarea v-model="editingChar.greeting" rows="3" placeholder="例如：你好呀，我是艾丽丝～"></textarea><button class="expand-btn" @click="openFullscreenChar('greeting')">⤢</button></div>
+              <div class="expand-wrap"><textarea v-model="editingChar.greeting" rows="3" placeholder="例如：你好呀，我是艾丽丝～"></textarea><button class="expand-btn" @click="openFullscreenFor(editingChar, 'greeting', '开场白')">⤢</button></div>
             </div>
-            <div class="form-group"><label>基本信息</label><textarea v-model="editingChar.roleCard.basic" rows="2"></textarea></div>
-            <div class="form-group"><label>性格</label><textarea v-model="editingChar.roleCard.personality" rows="2"></textarea></div>
-            <div class="form-group"><label>故事背景</label><textarea v-model="editingChar.roleCard.background" rows="3"></textarea></div>
-            <div class="form-group"><label>说话风格</label><textarea v-model="editingChar.roleCard.style" rows="2"></textarea></div>
+            <div class="form-group"><label>基本信息</label><div class="expand-wrap"><textarea v-model="editingChar.roleCard.basic" rows="2"></textarea><button class="expand-btn" @click="openFullscreenFor(editingChar.roleCard, 'basic', '基本信息')">⤢</button></div></div>
+            <div class="form-group"><label>性格</label><div class="expand-wrap"><textarea v-model="editingChar.roleCard.personality" rows="2"></textarea><button class="expand-btn" @click="openFullscreenFor(editingChar.roleCard, 'personality', '性格')">⤢</button></div></div>
+            <div class="form-group"><label>故事背景</label><div class="expand-wrap"><textarea v-model="editingChar.roleCard.background" rows="3"></textarea><button class="expand-btn" @click="openFullscreenFor(editingChar.roleCard, 'background', '故事背景')">⤢</button></div></div>
+            <div class="form-group"><label>说话风格</label><div class="expand-wrap"><textarea v-model="editingChar.roleCard.style" rows="2"></textarea><button class="expand-btn" @click="openFullscreenFor(editingChar.roleCard, 'style', '说话风格')">⤢</button></div></div>
             <div class="form-group"><label>关联世界书</label>
               <select v-model="editingChar.worldBookId">
                 <option :value="null">无</option>

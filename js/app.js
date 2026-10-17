@@ -127,7 +127,7 @@
       }
 
       function triggerActiveMessage() {
-        if (!apiConfigured.value) { showToastMessage('⚠️ 请先配置 API'); return; }
+        if (!apiConfigured.value) { showToastMessage('请先配置 API'); return; }
         if (isProcessing || isSending.value) return;
         // 主动消息：构建不含历史、带主动指令的系统提示
         const c = activeChar.value;
@@ -176,7 +176,7 @@
         isTyping.value = false;
         if (!r.ok) {
           addMessage('assistant', '', targetSl); // 5 次失败后空白消息
-          showToastMessage('⚠️ ' + (r.lastError ? r.lastError.message : '未回复'));
+          showToastMessage(r.lastError ? r.lastError.message : '未回复');
           return;
         }
         splitReply(r.content).forEach((part, i) => {
@@ -309,7 +309,7 @@
         } finally {
           if (targetMsg) regeneratingId.value = null;
         }
-        if (!r.ok) { showToastMessage('⚠️ 重新回复失败'); return; }
+        if (!r.ok) { showToastMessage('重新回复失败'); return; }
         if (targetMsg) Store.addSwipe(targetMsg, r.content);
         else addMessage('assistant', r.content, sl);
       }
@@ -341,7 +341,7 @@
         state.activeStorylineId = branch.id;
         closeMessageMenu();
         scrollToBottom();
-        showToastMessage('✅ 已复制到新故事线');
+        showToastMessage('已复制到新故事线');
       }
 
       // —— 设置：API / 全局 / 用户 / 数据 ——
@@ -350,46 +350,45 @@
 
       function apiCfg() { return { apiUrl: state.global.apiUrl, apiKey: state.global.apiKey, model: state.global.model, temperature: state.global.temperature, maxTokens: state.global.replyLength }; }
 
-      function saveApi() { const g = state.global; if (!g.apiUrl || !g.apiKey || !g.model) { showToastMessage('请完整填写 API 地址、Key 和模型'); return; } showToastMessage('✅ API配置已保存'); }
+      function saveApi() { const g = state.global; if (!g.apiUrl || !g.apiKey || !g.model) { showToastMessage('请完整填写 API 地址、Key 和模型'); return; } showToastMessage('API配置已保存'); }
       async function fetchModels() {
         isFetchingModels.value = true; testDetail.value = '正在获取...';
         try { modelOptions.value = await Api.fetchModels(state.global.apiUrl, state.global.apiKey); testDetail.value = `获取 ${modelOptions.value.length} 个模型`; testStatus.value = 'success'; }
-        catch (e) { testDetail.value = '❌ ' + e.message; testStatus.value = 'error'; }
+        catch (e) { testDetail.value = e.message; testStatus.value = 'error'; }
         finally { isFetchingModels.value = false; }
       }
       async function runTest() {
         isTesting.value = true; testStatus.value = 'testing'; testDetail.value = '测试中...';
-        try { const reply = await Api.testConnection(apiCfg()); testDetail.value = `✅ 成功: "${reply}"`; testStatus.value = 'success'; }
-        catch (e) { testDetail.value = '❌ ' + e.message; testStatus.value = 'error'; }
+        try { const reply = await Api.testConnection(apiCfg()); testDetail.value = `成功: "${reply}"`; testStatus.value = 'success'; }
+        catch (e) { testDetail.value = e.message; testStatus.value = 'error'; }
         finally { isTesting.value = false; }
       }
-      function saveGlobal() { showToastMessage('✅ 全局设置已保存'); }
-      function saveUser() { showToastMessage('✅ 用户设定已保存'); }
+      function saveGlobal() { showToastMessage('全局设置已保存'); }
+      function saveUser() { showToastMessage('用户设定已保存'); }
 
       function uploadUserAvatar(e) { compressImage(e.target.files[0], d => { state.global.userCard.avatar = d; }); }
       function removeUserAvatar() { state.global.userCard.avatar = ''; }
-      // 压缩头像（最大 200px，JPEG 0.7）
+      // 压缩头像并裁剪为圆形（256px，PNG 透明底）
       function compressImage(file, callback) {
         if (!file) return;
         const reader = new FileReader();
         reader.onload = (e) => {
           const img = new Image();
           img.onload = () => {
+            const SIZE = 256;
             const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 200;
-            const MAX_HEIGHT = 200;
-            let width = img.width;
-            let height = img.height;
-            if (width > height) {
-              if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-            } else {
-              if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-            }
-            canvas.width = width;
-            canvas.height = height;
+            canvas.width = SIZE;
+            canvas.height = SIZE;
             const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            const side = Math.min(img.width, img.height);
+            const sx = (img.width - side) / 2;
+            const sy = (img.height - side) / 2;
+            ctx.beginPath();
+            ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.clip();
+            ctx.drawImage(img, sx, sy, side, side, 0, 0, SIZE, SIZE);
+            const dataUrl = canvas.toDataURL('image/png');
             callback(dataUrl);
           };
           img.src = e.target.result;
@@ -404,7 +403,7 @@
         a.download = `ai_chat_backup_${new Date().toISOString().slice(0,10)}.json`;
         document.body.appendChild(a); a.click(); a.remove();
         URL.revokeObjectURL(a.href);
-        showToastMessage('✅ 数据导出成功');
+        showToastMessage('数据导出成功');
       }
       function importData() {
         const input = document.createElement('input');
@@ -418,19 +417,25 @@
               Object.keys(state).forEach(k => delete state[k]);
               Object.assign(state, next);
               Store.saveState(state, localStorage);
-              showToastMessage('✅ 导入成功'); location.reload();
-            } catch (err) { alert('❌ 导入失败：' + err.message); }
+              showToastMessage('导入成功'); location.reload();
+            } catch (err) { alert('导入失败：' + err.message); }
           };
           reader.readAsText(file);
         };
         input.click();
       }
 
-      // —— 全屏编辑器（Ruling B） ——
+      // —— 全屏编辑器（通用：可编辑任意对象字段） ——
       const fullscreenVisible = ref(false); const fullscreenTitle = ref(''); const fullscreenContent = ref('');
       let fullscreenTarget = null, fullscreenField = '';
-      function openFullscreen(field) { fullscreenTarget = state.global; fullscreenField = field; fullscreenTitle.value = field; fullscreenContent.value = fullscreenTarget[field] || ''; fullscreenVisible.value = true; }
-      function confirmFullscreen() { fullscreenTarget[fullscreenField] = fullscreenContent.value; fullscreenVisible.value = false; }
+      function openFullscreenFor(target, field, title) {
+        fullscreenTarget = target;
+        fullscreenField = field;
+        fullscreenTitle.value = title || field;
+        fullscreenContent.value = (target && typeof target[field] === 'string') ? target[field] : '';
+        fullscreenVisible.value = true;
+      }
+      function confirmFullscreen() { if (fullscreenTarget) fullscreenTarget[fullscreenField] = fullscreenContent.value; fullscreenVisible.value = false; }
       function closeFullscreen() { fullscreenVisible.value = false; }
 
       // —— 设置：角色管理 ——
@@ -444,7 +449,7 @@
         settingsView.value = 'characterEdit';
       }
       function openCharacterEdit(id) { editingCharId.value = id; settingsView.value = 'characterEdit'; }
-      function saveCharacter() { showToastMessage('✅ 角色已保存'); settingsView.value = 'characters'; }
+      function saveCharacter() { showToastMessage('角色已保存'); settingsView.value = 'characters'; }
       function deleteCharacter() {
         const c = editingChar.value; if (!c) return;
         if (!confirm('确定删除该角色及其所有故事线？')) return;
@@ -459,8 +464,6 @@
 
       function uploadRoleAvatar(e) { compressImage(e.target.files[0], d => { if (editingChar.value) editingChar.value.avatar = d; }); }
       function removeRoleAvatar() { if (editingChar.value) editingChar.value.avatar = ''; }
-
-      function openFullscreenChar(field) { fullscreenTarget = editingChar.value; fullscreenField = field; fullscreenTitle.value = field; fullscreenContent.value = fullscreenTarget[field] || ''; fullscreenVisible.value = true; }
 
       // —— 设置：全局世界书 ——
       function addWorldBook() {
@@ -492,10 +495,10 @@
         saveApi, fetchModels, runTest, saveGlobal, saveUser,
         uploadUserAvatar, removeUserAvatar, exportData, importData,
         fullscreenVisible, fullscreenTitle, fullscreenContent,
-        openFullscreen, confirmFullscreen, closeFullscreen,
+        openFullscreenFor, confirmFullscreen, closeFullscreen,
         editingCharId, editingChar, createCharacter, openCharacterEdit,
         saveCharacter, deleteCharacter, uploadRoleAvatar, removeRoleAvatar,
-        openFullscreenChar, addWorldBook, deleteWorldBook, addWorldBookEntry, removeWorldBookEntry,
+        addWorldBook, deleteWorldBook, addWorldBookEntry, removeWorldBookEntry,
       };
     }
   }).mount('#app');

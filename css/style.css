@@ -619,26 +619,36 @@
             line-height: 1.5;
         }
 
-        .form-group .textarea-wrapper {
+        /* 可扩大输入框（右下角 ⤢ 全屏编辑） */
+        .expand-wrap {
             position: relative;
         }
 
-        .form-group .textarea-wrapper .expand-btn {
+        .expand-wrap > input {
+            width: 100%;
+            padding-right: 40px !important;
+        }
+
+        .expand-wrap > textarea {
+            width: 100%;
+        }
+
+        .expand-wrap .expand-btn {
             position: absolute;
-            bottom: 8px;
-            right: 8px;
-            background: rgba(0, 0, 0, 0.05);
+            bottom: 6px;
+            right: 6px;
+            background: rgba(0, 0, 0, 0.06);
             border: none;
             border-radius: 6px;
-            padding: 4px 8px;
-            font-size: 18px;
+            padding: 3px 8px;
+            font-size: 16px;
             cursor: pointer;
             color: #888;
             transition: background 0.2s;
         }
 
-        .form-group .textarea-wrapper .expand-btn:active {
-            background: rgba(0, 0, 0, 0.1);
+        .expand-wrap .expand-btn:active {
+            background: rgba(0, 0, 0, 0.12);
         }
 
         .form-group .input-row .btn-fetch {
@@ -1112,6 +1122,7 @@
 .mode-badge.story { background: #f4e8ff; color: #7a3fd0; }
 /* 三点按钮与 swipe 控制 */
 .bubble-row { display: flex; align-items: flex-start; gap: 4px; }
+.message-wrapper.assistant .bubble-row { flex-direction: row-reverse; }
 .msg-more { background: transparent; border: none; color: #bbb; font-size: 13px; padding: 1px 2px; cursor: pointer; align-self: flex-start; margin-top: 6px; line-height: 1; }
 .regen-spinner { display: inline-block; width: 10px; height: 10px; border: 2px solid #ccc; border-top-color: #075e54; border-radius: 50%; animation: regenSpin 0.7s linear infinite; }
 @keyframes regenSpin { to { transform: rotate(360deg); } }
