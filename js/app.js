@@ -16,6 +16,8 @@
       const showDrawer = ref(false);
       const showSettings = ref(false);
       const settingsView = ref('home');
+      const drawerShowAllStorylines = ref(false);
+      const editingStorylineId = ref(null);
 
       // 自动持久化
       let saveTimer = null;
@@ -37,24 +39,8 @@
       // —— 消息列表渲染 ——
       const displayMessages = computed(() => {
         const sl = activeStoryline.value;
-        if (!sl) return [];
-        const msgs = sl.messages;
-        const out = [];
-        const five = 5 * 60 * 1000;
-        msgs.forEach((m, i) => {
-          if (i === 0 || (m.timestamp - msgs[i - 1].timestamp) > five) {
-            out.push({ type: 'time-label', key: 't' + m.id, timestamp: m.timestamp, displayTime: formatTimeLabel(m.timestamp) });
-          }
-          out.push(Object.assign({ key: 'm' + m.id }, m));
-        });
-        return out;
+        return sl ? sl.messages : [];
       });
-
-      function formatTimeLabel(t) {
-        const d = new Date(t);
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        return `${months[d.getMonth()]} ${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-      }
 
       function addMessage(role, content, sl) {
         const target = sl || activeStoryline.value;
@@ -75,22 +61,14 @@
           c.storylines.push(sl);
         }
         state.activeStorylineId = c.storylines[0].id;
+        drawerShowAllStorylines.value = false;
+        editingStorylineId.value = null;
         showDrawer.value = false;
         scrollToBottom();
       }
 
       function selectStoryline(id) {
         state.activeStorylineId = id;
-        showDrawer.value = false;
-        scrollToBottom();
-      }
-
-      function newCharacter() {
-        const c = Store.newCharacter('新角色', 'chat');
-        state.characters.push(c);
-        state.activeCharacterId = c.id;
-        if (!c.storylines.length) c.storylines.push(Store.newStoryline('新故事线'));
-        state.activeStorylineId = c.storylines[0].id;
         showDrawer.value = false;
         scrollToBottom();
       }
@@ -108,6 +86,16 @@
         showDrawer.value = false;
         scrollToBottom();
       }
+
+      // —— 左侧抽屉：故事线（默认最近 2 条，可展开全部、可重命名）——
+      const sortedStorylines = computed(() => {
+        const c = activeChar.value;
+        if (!c) return [];
+        const lastActive = (s) => (s.messages && s.messages.length) ? s.messages[s.messages.length - 1].timestamp : (s.createdAt || 0);
+        return [...c.storylines].sort((a, b) => lastActive(b) - lastActive(a));
+      });
+      const visibleStorylines = computed(() => drawerShowAllStorylines.value ? sortedStorylines.value : sortedStorylines.value.slice(0, 2));
+      function renameStoryline(s) { editingStorylineId.value = null; if (s && s.name) s.name = s.name.trim(); }
 
       // —— 发送 ——
       let isProcessing = false;
@@ -147,8 +135,8 @@
         const sl = activeStoryline.value;
         const parts = [];
         parts.push(`【主动指令】你是主动发起对话的一方，请根据角色设定主动说一句话开启话题。`);
-        parts.push(`【格式要求】${c.mode === 'chat' ? '只回复“要说的话”，禁止动作/心理/环境/旁白描写。' : '可以包含动作、心理、环境等描写。'}`);
-        const system = '请严格遵循以下设定：\n' + parts.join('\n') + '\n' + Prompt.buildSystemPrompt({ character: c, userCard: state.global.userCard, globalNotes: state.global.globalNotes, memorySummary: c.mode === 'chat' ? c.memorySummary : '' });
+        parts.push(`【格式要求】可以包含动作、心理、环境等描写。`);
+        const system = '请严格遵循以下设定：\n' + parts.join('\n') + '\n' + Prompt.buildSystemPrompt({ character: c, userCard: state.global.userCard, globalNotes: state.global.globalNotes });
         doRequest(system, [], sl);
       }
 
@@ -159,10 +147,10 @@
           const c = first.c || activeChar.value;
           if (!c) { showToastMessage('请先创建角色'); return; }
           const sl = first.sl || activeStoryline.value;
-          const worldHits = Prompt.matchWorldBook(c.worldBook, Prompt.recentContext(sl ? sl.messages : [], 8));
+          const worldHits = Prompt.matchWorldBook(Store.worldBookEntries(state, c), Prompt.recentContext(sl ? sl.messages : [], 8));
           const system = Prompt.buildSystemPrompt({
             character: c, userCard: state.global.userCard, globalNotes: state.global.globalNotes,
-            memorySummary: c.mode === 'chat' ? c.memorySummary : '', worldBookHits: worldHits,
+            worldBookHits: worldHits,
           });
           const history = Prompt.buildHistory(sl ? sl.messages : [], 20);
           await doRequest(system, history, sl);
@@ -220,6 +208,35 @@
       const targetMessage = ref(null);
       const editingMessageId = ref(null);
       const editingContent = ref('');
+      const regeneratingId = ref(null);
+
+      // —— 消息可用性（仅最新 AI 回复可重新回复；最新 AI 回复与最后用户消息可编辑）——
+      const lastUser = computed(() => {
+        const sl = activeStoryline.value;
+        if (!sl) return null;
+        for (let i = sl.messages.length - 1; i >= 0; i--) if (sl.messages[i].role === 'user') return sl.messages[i];
+        return null;
+      });
+      const lastAssistant = computed(() => {
+        const sl = activeStoryline.value;
+        if (!sl) return null;
+        for (let i = sl.messages.length - 1; i >= 0; i--) if (sl.messages[i].role === 'assistant') return sl.messages[i];
+        return null;
+      });
+      function isLastMessage(m) {
+        const sl = activeStoryline.value;
+        return !!(sl && m && sl.messages.length && sl.messages[sl.messages.length - 1].id === m.id);
+      }
+      const canEditTarget = computed(() => {
+        const m = targetMessage.value;
+        if (!m) return false;
+        return (lastUser.value && m.id === lastUser.value.id) || (lastAssistant.value && m.id === lastAssistant.value.id);
+      });
+      const canReReplyTarget = computed(() => {
+        const m = targetMessage.value;
+        if (!m || m.role !== 'assistant') return false;
+        return !!(lastAssistant.value && m.id === lastAssistant.value.id && isLastMessage(m));
+      });
 
       function openMessageMenu(event, msg) {
         event.preventDefault();
@@ -256,10 +273,10 @@
       }
       function saveEdit(msg) {
         const text = editingContent.value.trim();
-        if (activeChar.value && activeChar.value.mode === 'story') {
-          Store.addSwipe(msg, text); // 剧情向：追加分支
+        if (msg.role === 'assistant') {
+          Store.addSwipe(msg, text); // AI 消息：保留旧版本，生成分支
         } else {
-          msg.swipes[msg.swipeIndex].content = text || Store.currentContent(msg);
+          msg.swipes[msg.swipeIndex].content = text || Store.currentContent(msg); // 用户消息：直接覆盖
         }
         editingMessageId.value = null;
         editingContent.value = '';
@@ -282,20 +299,19 @@
         const history = Prompt.buildHistory(historyMsgs, 20);
         const system = Prompt.buildSystemPrompt({
           character: c, userCard: state.global.userCard, globalNotes: state.global.globalNotes,
-          memorySummary: c.mode === 'chat' ? c.memorySummary : '',
-          worldBookHits: Prompt.matchWorldBook(c.worldBook, Prompt.recentContext(historyMsgs, 8)),
+          worldBookHits: Prompt.matchWorldBook(Store.worldBookEntries(state, c), Prompt.recentContext(historyMsgs, 8)),
         });
         const cfg = { apiUrl: state.global.apiUrl, apiKey: state.global.apiKey, model: state.global.model, temperature: state.global.temperature, maxTokens: state.global.replyLength };
-        isTyping.value = true;
-        const r = await Api.requestChat(cfg, [{ role: 'system', content: system }, ...history]);
-        isTyping.value = false;
-        if (!r.ok) { showToastMessage('⚠️ 重新回复失败'); return; }
-        if (targetMsg) {
-          if (c.mode === 'story') Store.addSwipe(targetMsg, r.content);
-          else targetMsg.swipes[targetMsg.swipeIndex].content = r.content;
-        } else {
-          addMessage('assistant', r.content, sl);
+        if (targetMsg) regeneratingId.value = targetMsg.id;
+        let r;
+        try {
+          r = await Api.requestChat(cfg, [{ role: 'system', content: system }, ...history]);
+        } finally {
+          if (targetMsg) regeneratingId.value = null;
         }
+        if (!r.ok) { showToastMessage('⚠️ 重新回复失败'); return; }
+        if (targetMsg) Store.addSwipe(targetMsg, r.content);
+        else addMessage('assistant', r.content, sl);
       }
 
       function deleteMessage() {
@@ -419,17 +435,15 @@
 
       // —— 设置：角色管理 ——
       const editingCharId = ref(null);
-      const charTab = ref('base');
       const editingChar = computed(() => state.characters.find(c => c.id === editingCharId.value) || null);
 
       function createCharacter() {
-        const c = Store.newCharacter('新角色', 'chat');
+        const c = Store.newCharacter('新角色');
         state.characters.push(c);
         editingCharId.value = c.id;
-        charTab.value = 'base';
         settingsView.value = 'characterEdit';
       }
-      function openCharacterEdit(id) { editingCharId.value = id; charTab.value = 'base'; settingsView.value = 'characterEdit'; }
+      function openCharacterEdit(id) { editingCharId.value = id; settingsView.value = 'characterEdit'; }
       function saveCharacter() { showToastMessage('✅ 角色已保存'); settingsView.value = 'characters'; }
       function deleteCharacter() {
         const c = editingChar.value; if (!c) return;
@@ -443,48 +457,45 @@
         settingsView.value = 'characters';
       }
 
-      function addWorldBookEntry() { editingChar.value.worldBook.push({ id: Math.random().toString(36).slice(2,10), key: '', content: '', enabled: true, isRegex: false, alwaysInclude: false }); }
-      function removeWorldBookEntry(i) { editingChar.value.worldBook.splice(i, 1); }
-
-      function newStorylineForChar() {
-        const c = editingChar.value; if (!c) return;
-        const sl = Store.newStoryline('新故事线');
-        if (c.greeting && c.greeting.trim()) sl.messages.push(Store.newMessage('assistant', c.greeting.trim(), state));
-        c.storylines.push(sl);
-      }
-      function deleteStoryline(id) {
-        const c = editingChar.value; if (!c) return;
-        const i = c.storylines.findIndex(s => s.id === id);
-        if (i === -1) return;
-        c.storylines.splice(i, 1);
-        if (state.activeStorylineId === id) state.activeStorylineId = c.storylines.length ? c.storylines[0].id : null;
-      }
-
       function uploadRoleAvatar(e) { compressImage(e.target.files[0], d => { if (editingChar.value) editingChar.value.avatar = d; }); }
       function removeRoleAvatar() { if (editingChar.value) editingChar.value.avatar = ''; }
 
       function openFullscreenChar(field) { fullscreenTarget = editingChar.value; fullscreenField = field; fullscreenTitle.value = field; fullscreenContent.value = fullscreenTarget[field] || ''; fullscreenVisible.value = true; }
+
+      // —— 设置：全局世界书 ——
+      function addWorldBook() {
+        state.global.worldBooks.push({ id: Math.random().toString(36).slice(2,10), name: '新世界书', entries: [] });
+      }
+      function deleteWorldBook(id) {
+        const i = state.global.worldBooks.findIndex(w => w.id === id);
+        if (i === -1) return;
+        state.global.worldBooks.splice(i, 1);
+        state.characters.forEach(c => { if (c.worldBookId === id) c.worldBookId = null; });
+      }
+      function addWorldBookEntry(wb) { wb.entries.push({ id: Math.random().toString(36).slice(2,10), key: '', content: '', enabled: true, isRegex: false, alwaysInclude: false }); }
+      function removeWorldBookEntry(wb, i) { wb.entries.splice(i, 1); }
 
       return {
         state, Store, activeChar, activeStoryline, apiConfigured,
         inputMessage, isSending, isTyping, showDrawer, showSettings, settingsView,
         chatContainer, inputTextarea, autoResizeTextarea, openSettings,
         displayMessages, addMessage, selectCharacter, selectStoryline,
-        newCharacter, newStoryline, sendMessage, triggerActiveMessage,
-        scrollToBottom, onChatScroll, formatTimeLabel,
+        newStoryline, sendMessage, triggerActiveMessage,
+        scrollToBottom, onChatScroll,
         showToast, toastMessage, showToastMessage,
         showMessageMenu, menuPosition, targetMessage, editingMessageId, editingContent,
         openMessageMenu, closeMessageMenu, startEdit, saveEdit, cancelEdit,
         reReply, deleteMessage, deleteAfterThis, branchFromHere,
+        canEditTarget, canReReplyTarget, isLastMessage, regeneratingId,
+        drawerShowAllStorylines, visibleStorylines, editingStorylineId, renameStoryline,
         modelOptions, isFetchingModels, testStatus, testDetail, isTesting,
         saveApi, fetchModels, runTest, saveGlobal, saveUser,
         uploadUserAvatar, removeUserAvatar, exportData, importData,
         fullscreenVisible, fullscreenTitle, fullscreenContent,
         openFullscreen, confirmFullscreen, closeFullscreen,
-        editingCharId, charTab, editingChar, createCharacter, openCharacterEdit,
-        saveCharacter, deleteCharacter, addWorldBookEntry, removeWorldBookEntry,
-        newStorylineForChar, deleteStoryline, uploadRoleAvatar, removeRoleAvatar,
-        openFullscreenChar,
+        editingCharId, editingChar, createCharacter, openCharacterEdit,
+        saveCharacter, deleteCharacter, uploadRoleAvatar, removeRoleAvatar,
+        openFullscreenChar, addWorldBook, deleteWorldBook, addWorldBookEntry, removeWorldBookEntry,
       };
     }
   }).mount('#app');

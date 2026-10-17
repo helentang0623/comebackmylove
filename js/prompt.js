@@ -11,9 +11,9 @@
     return root.AIChat.Store;
   }
 
-  function roleCardText(r) {
+  function roleCardText(r, name) {
     r = r || {};
-    return [`[NAME]${r.name||''}`, `[BASIC]${r.basic||''}`, `[PERSONALITY]${r.personality||''}`, `[BACKGROUND]${r.background||''}`, `[STYLE]${r.style||''}`].join('\n');
+    return [`[NAME]${name||''}`, `[BASIC]${r.basic||''}`, `[PERSONALITY]${r.personality||''}`, `[BACKGROUND]${r.background||''}`, `[STYLE]${r.style||''}`].join('\n');
   }
 
   function userCardText(u) {
@@ -63,7 +63,7 @@
     const c = opts.character || {};
     const parts = [];
     if (opts.globalNotes) parts.push(`【全局注意事项】${opts.globalNotes}`);
-    const role = roleCardText(c.roleCard);
+    const role = roleCardText(c.roleCard, c.name);
     if (role.trim()) parts.push(`【AI人设】${role}`);
     const user = userCardText(opts.userCard);
     if (user.trim()) parts.push(`【用户人设】${user}`);
@@ -74,13 +74,7 @@
     const hh = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
     parts.push(`【当前时间】${timeGreeting(now)} ${hh}:${mm}（用户所在时区）。`);
-    if (c.mode === 'chat') {
-      parts.push(`【格式要求】你只能回复“要说的话”，严禁任何动作、心理、环境、旁白描写；禁止使用括号、星号或任何符号标注动作。`);
-      const memory = opts.memorySummary || c.memorySummary;
-      if (memory) parts.push(`【记忆摘要】${memory}`);
-    } else {
-      parts.push(`【格式要求】这是剧情向模式，你可以包含动作、心理、环境等描写。`);
-    }
+    parts.push(`【格式要求】你可以包含动作、心理、环境等描写。`);
     return '请严格遵循以下设定：\n' + parts.join('\n');
   }
 

@@ -1112,9 +1112,14 @@
 .mode-badge.story { background: #f4e8ff; color: #7a3fd0; }
 /* 三点按钮与 swipe 控制 */
 .bubble-row { display: flex; align-items: flex-start; gap: 4px; }
-.msg-more { background: transparent; border: none; color: #999; font-size: 18px; padding: 2px 4px; cursor: pointer; align-self: center; }
+.msg-more { background: transparent; border: none; color: #bbb; font-size: 13px; padding: 1px 2px; cursor: pointer; align-self: flex-start; margin-top: 6px; line-height: 1; }
+.regen-spinner { display: inline-block; width: 10px; height: 10px; border: 2px solid #ccc; border-top-color: #075e54; border-radius: 50%; animation: regenSpin 0.7s linear infinite; }
+@keyframes regenSpin { to { transform: rotate(360deg); } }
 .swipe-control { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; color: #888; }
 .swipe-control button { background: #eee; border: none; border-radius: 10px; width: 24px; height: 24px; cursor: pointer; font-size: 12px; }
+/* 抽屉故事线重命名 */
+.storyline-rename-btn { background: transparent; border: none; color: #999; font-size: 14px; cursor: pointer; padding: 2px; }
+.storyline-rename-input { flex: 1; border: 1.5px solid #075e54; border-radius: 6px; padding: 4px 8px; font-size: 14px; }
 /* 角色编辑标签页 */
 .tabs { display: flex; background: #fff; border-bottom: 1px solid #e0e0e0; }
 .tab { flex: 1; text-align: center; padding: 10px 0; font-size: 13px; color: #666; cursor: pointer; border-bottom: 2px solid transparent; }
@@ -1125,6 +1130,10 @@
 .wb-entry input[type="text"], .wb-entry textarea { flex: 1; min-width: 60%; padding: 8px 10px; border: 1.5px solid #e0e0e0; border-radius: 8px; font-size: 14px; }
 .btn-add { width: 100%; padding: 12px; background: #e8f0ee; border: 1.5px dashed #b8cfca; border-radius: 12px; color: #075e54; font-size: 14px; cursor: pointer; }
 .btn-danger { background: #fdecea; color: #c0392b; border: none; border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+/* 全局世界书 */
+.wb-block { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #f0f0f0; }
+.wb-block .row { display: flex; gap: 8px; align-items: center; }
+.wb-name { flex: 1; padding: 8px 10px; border: 1.5px solid #e0e0e0; border-radius: 8px; font-size: 15px; font-weight: 600; }
 .mode-seg { display: flex; background: #f0f0f0; border-radius: 10px; padding: 3px; }
 .mode-seg .seg { flex: 1; text-align: center; padding: 8px 0; border-radius: 8px; cursor: pointer; font-size: 14px; color: #666; }
 .mode-seg .seg.active { background: #075e54; color: #fff; }

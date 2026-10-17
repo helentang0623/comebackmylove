@@ -22,6 +22,7 @@
         temperature: 0.7,
         replyLength: 500,
         globalNotes: '',
+        worldBooks: [],
         userCard: { name: '', basic: '', personality: '', background: '', avatar: '' },
       },
       characters: [],
@@ -30,16 +31,14 @@
     };
   }
 
-  function defaultRoleCard() { return { name: '', basic: '', personality: '', background: '', style: '' }; }
+  function defaultRoleCard() { return { basic: '', personality: '', background: '', style: '' }; }
 
-  function newCharacter(name, mode) {
+  function newCharacter(name) {
     return {
       id: uid(), name: name || '新角色', avatar: '',
-      mode: (mode === 'story') ? 'story' : 'chat',
       greeting: '',
       roleCard: defaultRoleCard(),
-      memorySummary: '',
-      worldBook: [],
+      worldBookId: null,
       storylines: [],
     };
   }
@@ -67,6 +66,12 @@
     const c = activeCharacter(state);
     if (!c) return null;
     return (c.storylines || []).find(s => s.id === state.activeStorylineId) || null;
+  }
+
+  function worldBookEntries(state, character) {
+    const wbs = (state.global && state.global.worldBooks) || [];
+    const wb = wbs.find(w => w.id === character.worldBookId);
+    return (wb && wb.entries) || [];
   }
 
   function addSwipe(msg, content) {
@@ -121,11 +126,18 @@
     const rawGlobal = (raw.global && typeof raw.global === 'object') ? raw.global : {};
     s.global = Object.assign(defaultGlobal, rawGlobal);
     s.global.userCard = Object.assign(defaultUserCard, rawGlobal.userCard || {});
+    if (!Array.isArray(s.global.worldBooks)) s.global.worldBooks = [];
+    s.global.worldBooks.forEach(wb => { if (!Array.isArray(wb.entries)) wb.entries = []; });
     if (!Array.isArray(s.characters)) s.characters = [];
     s.characters.forEach(c => {
       c.roleCard = Object.assign(defaultRoleCard(), c.roleCard || {});
-      if (c.mode !== 'story') c.mode = 'chat';
-      if (!Array.isArray(c.worldBook)) c.worldBook = [];
+      if (Array.isArray(c.worldBook) && c.worldBook.length && !c.worldBookId) {
+        const wb = { id: uid(), name: (c.name || '角色') + ' 的世界书', entries: c.worldBook };
+        s.global.worldBooks.push(wb);
+        c.worldBookId = wb.id;
+      }
+      if (typeof c.worldBookId !== 'string') c.worldBookId = null;
+      delete c.mode; delete c.memorySummary; delete c.worldBook;
       if (!Array.isArray(c.storylines)) c.storylines = [];
       c.storylines.forEach(sl => {
         if (!Array.isArray(sl.messages)) sl.messages = [];
@@ -166,7 +178,7 @@
 
   return {
     KEY, VERSION, createDefaultState, newCharacter, newMessage, newStoryline,
-    activeCharacter, activeStoryline, addSwipe, setSwipeIndex, currentContent,
+    activeCharacter, activeStoryline, worldBookEntries, addSwipe, setSwipeIndex, currentContent,
     deleteMessage, deleteAfter, branchFrom,
     loadState, saveState, normalize, exportJSON, importJSON, timeStr,
   };
