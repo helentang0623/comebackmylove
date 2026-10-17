@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
+  <title>AI Chat · 智能陪伴</title>
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body>
+  <div id="app">
+    <header class="navbar">
+      <div class="navbar-left">
+        <button class="navbar-btn" @click="showDrawer = true">☰</button>
+        <img v-if="activeChar && activeChar.avatar" :src="activeChar.avatar" class="nav-avatar" />
+        <span v-else class="app-icon" style="width:34px;height:34px;">🤖</span>
+        <div class="nav-titles">
+          <span class="app-title">{{ activeChar ? activeChar.name : 'AI Chat' }}</span>
+          <span v-if="activeChar" class="mode-badge" :class="activeChar.mode">{{ activeChar.mode === 'chat' ? '纯聊天' : '剧情向' }}</span>
+        </div>
+      </div>
+      <div class="navbar-right">
+        <span class="status-badge" :class="apiConfigured ? 'online' : 'offline'">{{ apiConfigured ? '已连接' : '未配置' }}</span>
+        <button class="navbar-btn" @click="openSettings">⚙️</button>
+      </div>
+    </header>
+
+    <div class="chat-area" ref="chatContainer" @scroll="onChatScroll">
+      <template v-for="item in displayMessages" :key="item.key">
+        <div v-if="item.type === 'time-label'" class="time-label">{{ item.displayTime }}</div>
+        <div v-else-if="item.role === 'user' || item.role === 'assistant'" class="message-wrapper" :class="item.role">
+          <div class="msg-avatar" :style="item.role === 'user' ? (state.global.userCard.avatar ? '' : 'background:#075e54') : (activeChar && activeChar.avatar ? '' : 'background:#5f7d9c')">
+            <img v-if="item.role === 'user' && state.global.userCard.avatar" :src="state.global.userCard.avatar" />
+            <img v-else-if="item.role === 'assistant' && activeChar && activeChar.avatar" :src="activeChar.avatar" />
+            <span v-else>{{ item.role === 'user' ? '我' : 'AI' }}</span>
+          </div>
+          <div class="bubble-col">
+            <div class="bubble-row">
+              <div class="bubble" :class="{ 'editing-bubble': editingMessageId === item.id }">
+                <div v-if="editingMessageId === item.id" class="edit-container">
+                  <textarea v-model="editingContent" class="edit-textarea" rows="3"></textarea>
+                  <div class="edit-actions">
+                    <button @click="saveEdit(item)" class="edit-save-btn">✅ 保存</button>
+                    <button @click="cancelEdit" class="edit-cancel-btn">❌ 取消</button>
+                  </div>
+                </div>
+                <div v-else class="msg-text">{{ Store.currentContent(item) }}</div>
+              </div>
+              <button class="msg-more" @click.stop="openMessageMenu($event, item)">⋯</button>
+            </div>
+            <div v-if="item.swipes.length > 1" class="swipe-control">
+              <button @click="Store.setSwipeIndex(item, item.swipeIndex - 1)">◀</button>
+              <span>{{ item.swipeIndex + 1 }} / {{ item.swipes.length }}</span>
+              <button @click="Store.setSwipeIndex(item, item.swipeIndex + 1)">▶</button>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <div v-if="isTyping" class="typing-indicator">
+        <div class="msg-avatar" style="background:#5f7d9c">AI</div>
+        <div class="bubble"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
+      </div>
+
+      <div v-if="!activeStoryline || activeStoryline.messages.length === 0 && !isTyping" class="chat-empty">
+        <div class="empty-icon">💬</div>
+        <div style="font-weight:500; font-size:17px;">{{ activeChar ? '和 ' + activeChar.name + ' 开始聊天' : '开始你的 AI 陪伴之旅' }}</div>
+        <div class="empty-sub">{{ apiConfigured ? '发送第一条消息，或新建故事线' : '配置好 API 后即可开始' }}</div>
+        <button class="btn-go-setting" @click="openSettings">⚙️ 去设置</button>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <textarea v-model="inputMessage" @input="autoResizeTextarea" placeholder="输入消息..." rows="1" ref="inputTextarea" :disabled="isSending || !apiConfigured"></textarea>
+      <button class="btn-send" @click="sendMessage" :disabled="isSending || !apiConfigured">{{ isSending ? '⏳' : '➤' }}</button>
+    </div>
+
+    <div v-if="showMessageMenu" class="message-menu" :style="{ left: menuPosition.x + 'px', top: menuPosition.y + 'px' }" @click.stop>
+      <div class="menu-item" @click="startEdit(targetMessage)">✏️ 编辑</div>
+      <div class="menu-item" v-if="targetMessage && targetMessage.role === 'assistant'" @click="reReply">🔄 重新回复</div>
+      <div class="menu-item" @click="branchFromHere">🆕 从此处开始新聊天</div>
+      <div class="menu-item" @click="deleteAfterThis">↩️ 退回到此处</div>
+      <div class="menu-item" @click="deleteMessage">🗑️ 删除</div>
+    </div>
+    <div v-if="showToast" class="toast">{{ toastMessage }}</div>
+
+    <div v-if="showDrawer" class="drawer-mask" @click="showDrawer = false"></div>
+    <div v-if="showDrawer" class="drawer">
+      <div class="drawer-header">角色与故事线</div>
+      <div class="drawer-body">
+        <div v-for="c in state.characters" :key="c.id">
+          <div class="drawer-item" :class="{ active: c.id === state.activeCharacterId }" @click="selectCharacter(c.id)">
+            <img v-if="c.avatar" :src="c.avatar" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" />
+            <span v-else>🤖</span>
+            <span class="name">{{ c.name }}</span>
+            <span class="mode-badge" :class="c.mode">{{ c.mode === 'chat' ? '纯聊天' : '剧情向' }}</span>
+          </div>
+          <div v-if="c.id === state.activeCharacterId" style="padding-left: 16px;">
+            <div v-for="s in c.storylines" :key="s.id" class="drawer-item" :class="{ active: s.id === state.activeStorylineId }" @click="selectStoryline(s.id)">
+              <span style="width:32px;"></span>
+              <span class="name">📜 {{ s.name }}</span>
+            </div>
+            <div class="drawer-item" @click="newStoryline" style="color:#075e54;">＋ 新建故事线</div>
+          </div>
+        </div>
+        <div class="drawer-item" @click="newCharacter" style="color:#075e54;">＋ 新建角色</div>
+      </div>
+    </div>
+
+    <div v-if="showSettings" class="settings-overlay">
+      <template v-if="settingsView === 'home'">
+        <div class="settings-header"><button class="back-btn" @click="showSettings = false">‹</button><h2>设置</h2><span style="width:40px;"></span></div>
+        <div class="settings-body">
+          <div class="settings-list">
+            <div class="settings-list-item" @click="settingsView = 'api'"><span class="item-label">🔌 API接入</span><span class="item-arrow">›</span></div>
+            <div class="settings-list-item" @click="settingsView = 'characters'"><span class="item-label">🎭 角色管理</span><span class="item-arrow">›</span></div>
+            <div class="settings-list-item" @click="settingsView = 'user'"><span class="item-label">👤 用户设定</span><span class="item-arrow">›</span></div>
+            <div class="settings-list-item" @click="settingsView = 'global'"><span class="item-label">⚙️ 全局设置</span><span class="item-arrow">›</span></div>
+            <div class="settings-list-item" @click="settingsView = 'data'"><span class="item-label">📦 数据</span><span class="item-arrow">›</span></div>
+          </div>
+        </div>
+      </template>
+
+      <template v-if="settingsView === 'api'">
+        <div class="settings-header"><button class="back-btn" @click="settingsView = 'home'">‹</button><h2>API接入</h2><span style="width:40px;"></span></div>
+        <div class="settings-body">
+          <div class="form-group"><label>API 地址</label><input type="url" v-model="state.global.apiUrl" placeholder="https://api.openai.com/v1" /></div>
+          <div class="form-group"><label>API Key</label><input type="text" v-model="state.global.apiKey" placeholder="sk-..." autocomplete="off" /></div>
+          <div class="form-group"><label>模型</label>
+            <div class="input-row">
+              <input type="text" v-model="state.global.model" list="modelList" placeholder="gpt-3.5-turbo" />
+              <datalist id="modelList"><option v-for="m in modelOptions" :key="m" :value="m" /></datalist>
+              <button class="btn-fetch" @click="fetchModels" :disabled="isFetchingModels">{{ isFetchingModels ? '⏳' : '🔄' }}</button>
+            </div>
+          </div>
+          <div class="test-section">
+            <div class="test-row">
+              <button class="btn-test" @click="runTest" :disabled="isTesting || !state.global.apiUrl || !state.global.apiKey">🧪 {{ isTesting ? '测试中...' : '测试连接' }}</button>
+              <div class="test-result" :class="testStatus"><span v-if="testStatus === 'idle'">⏳ 等待测试</span><span v-else-if="testStatus === 'success'">✅ 成功</span><span v-else-if="testStatus === 'error'">❌ 失败</span></div>
+            </div>
+            <div v-if="testDetail" class="test-detail">{{ testDetail }}</div>
+          </div>
+        </div>
+        <div class="settings-footer"><button class="btn-cancel" @click="settingsView = 'home'">返回</button><button class="btn-save" @click="saveApi">保存</button></div>
+      </template>
+
+      <template v-if="settingsView === 'global'">
+        <div class="settings-header"><button class="back-btn" @click="settingsView = 'home'">‹</button><h2>全局设置</h2><span style="width:40px;"></span></div>
+        <div class="settings-body">
+          <div class="form-group"><label>温度 <span class="label-hint">({{ state.global.temperature.toFixed(1) }})</span></label>
+            <input type="range" min="0" max="2" step="0.1" v-model.number="state.global.temperature" style="width:100%;" />
+          </div>
+          <div class="form-group"><label>回复长度 <span class="label-hint">(max_tokens)</span></label>
+            <select v-model.number="state.global.replyLength">
+              <option :value="200">简短 (~200)</option>
+              <option :value="500">中等 (~500)</option>
+              <option :value="1000">较长 (~1000)</option>
+            </select>
+          </div>
+          <div class="form-group"><label>全局注意事项</label>
+            <div class="textarea-wrapper"><textarea v-model="state.global.globalNotes" rows="4" placeholder="例如：必须用中文回复。"></textarea><button class="expand-btn" @click="openFullscreen('globalNotes')">⤢</button></div>
+          </div>
+        </div>
+        <div class="settings-footer"><button class="btn-cancel" @click="settingsView = 'home'">返回</button><button class="btn-save" @click="saveGlobal">保存</button></div>
+      </template>
+
+      <template v-if="settingsView === 'user'">
+        <div class="settings-header"><button class="back-btn" @click="settingsView = 'home'">‹</button><h2>用户设定</h2><span style="width:40px;"></span></div>
+        <div class="settings-body">
+          <div class="form-group"><label>姓名</label><input type="text" v-model="state.global.userCard.name" placeholder="例：小明" /></div>
+          <div class="form-group"><label>用户头像</label>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+              <img v-if="state.global.userCard.avatar" :src="state.global.userCard.avatar" style="width:60px;height:60px;border-radius:50%;object-fit:cover;" />
+              <input type="file" accept="image/*" @change="uploadUserAvatar" style="flex:1;min-width:120px;" />
+              <button v-if="state.global.userCard.avatar" @click="removeUserAvatar" style="background:none;border:none;color:#c0392b;font-size:20px;">✕</button>
+            </div>
+          </div>
+          <div class="form-group"><label>基本信息</label><textarea v-model="state.global.userCard.basic" rows="2"></textarea></div>
+          <div class="form-group"><label>性格</label><textarea v-model="state.global.userCard.personality" rows="2"></textarea></div>
+          <div class="form-group"><label>故事背景</label><textarea v-model="state.global.userCard.background" rows="3"></textarea></div>
+        </div>
+        <div class="settings-footer"><button class="btn-cancel" @click="settingsView = 'home'">返回</button><button class="btn-save" @click="saveUser">保存</button></div>
+      </template>
+
+      <template v-if="settingsView === 'data'">
+        <div class="settings-header"><button class="back-btn" @click="settingsView = 'home'">‹</button><h2>数据</h2><span style="width:40px;"></span></div>
+        <div class="settings-body">
+          <div class="settings-list">
+            <div class="settings-list-item" @click="exportData"><span class="item-label">📤 导出数据</span><span class="item-arrow">›</span></div>
+            <div class="settings-list-item" @click="importData"><span class="item-label">📥 导入数据</span><span class="item-arrow">›</span></div>
+          </div>
+        </div>
+      </template>
+
+      <template v-if="settingsView === 'characters'">
+        <div class="settings-header"><button class="back-btn" @click="settingsView = 'home'">‹</button><h2>角色管理</h2><span style="width:40px;"></span></div>
+        <div class="settings-body">
+          <div class="settings-list">
+            <div v-for="c in state.characters" :key="c.id" class="settings-list-item" @click="openCharacterEdit(c.id)">
+              <span class="item-label">{{ c.avatar ? '🖼️ ' : '🤖 ' }}{{ c.name }} <span class="mode-badge" :class="c.mode" style="margin-left:6px;">{{ c.mode === 'chat' ? '纯聊天' : '剧情向' }}</span></span>
+              <span class="item-arrow">›</span>
+            </div>
+            <div class="settings-list-item" @click="createCharacter"><span class="item-label" style="color:#075e54;">＋ 新增角色</span><span class="item-arrow"></span></div>
+          </div>
+        </div>
+      </template>
+
+      <template v-if="settingsView === 'characterEdit'">
+        <div class="settings-header"><button class="back-btn" @click="settingsView = 'characters'">‹</button><h2>{{ editingChar ? editingChar.name : '编辑角色' }}</h2><span style="width:40px;"></span></div>
+        <div class="tabs">
+          <div class="tab" :class="{ active: charTab === 'base' }" @click="charTab = 'base'">基础</div>
+          <div class="tab" :class="{ active: charTab === 'role' }" @click="charTab = 'role'">角色卡</div>
+          <div class="tab" :class="{ active: charTab === 'worldbook' }" @click="charTab = 'worldbook'">世界书</div>
+          <div class="tab" :class="{ active: charTab === 'memory' }" @click="charTab = 'memory'" v-if="editingChar && editingChar.mode === 'chat'">记忆</div>
+          <div class="tab" :class="{ active: charTab === 'storylines' }" @click="charTab = 'storylines'">故事线</div>
+        </div>
+        <div class="settings-body">
+          <template v-if="editingChar">
+            <template v-if="charTab === 'base'">
+              <div class="form-group"><label>名称</label><input type="text" v-model="editingChar.name" /></div>
+              <div class="form-group"><label>模式</label>
+                <div class="mode-seg">
+                  <div class="seg" :class="{ active: editingChar.mode === 'chat' }" @click="editingChar.mode = 'chat'">纯聊天</div>
+                  <div class="seg" :class="{ active: editingChar.mode === 'story' }" @click="editingChar.mode = 'story'">剧情向</div>
+                </div>
+                <div class="text-muted" style="margin-top:4px;">一个角色只能二选一；记忆管理仅纯聊天模式显示。</div>
+              </div>
+              <div class="form-group"><label>头像</label>
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                  <img v-if="editingChar.avatar" :src="editingChar.avatar" style="width:60px;height:60px;border-radius:50%;object-fit:cover;" />
+                  <input type="file" accept="image/*" @change="uploadRoleAvatar" style="flex:1;min-width:120px;" />
+                  <button v-if="editingChar.avatar" @click="removeRoleAvatar" style="background:none;border:none;color:#c0392b;font-size:20px;">✕</button>
+                </div>
+              </div>
+              <div class="form-group"><label>开场白 <span class="label-hint">(新故事线第一条消息)</span></label>
+                <div class="textarea-wrapper"><textarea v-model="editingChar.greeting" rows="3" placeholder="例如：你好呀，我是艾丽丝～"></textarea><button class="expand-btn" @click="openFullscreenChar('greeting')">⤢</button></div>
+              </div>
+            </template>
+
+            <template v-if="charTab === 'role'">
+              <div class="form-group"><label>姓名</label><input type="text" v-model="editingChar.roleCard.name" /></div>
+              <div class="form-group"><label>基本信息</label><textarea v-model="editingChar.roleCard.basic" rows="2"></textarea></div>
+              <div class="form-group"><label>性格</label><textarea v-model="editingChar.roleCard.personality" rows="2"></textarea></div>
+              <div class="form-group"><label>故事背景</label><textarea v-model="editingChar.roleCard.background" rows="3"></textarea></div>
+              <div class="form-group"><label>说话风格</label><textarea v-model="editingChar.roleCard.style" rows="2"></textarea></div>
+            </template>
+
+            <template v-if="charTab === 'worldbook'">
+              <div class="form-group text-muted">条目在最近 8 条消息中命中关键词/正则时注入。</div>
+              <div v-for="(e, i) in editingChar.worldBook" :key="e.id" class="wb-entry">
+                <div class="row">
+                  <label style="font-size:12px;">触发词/正则</label>
+                  <input type="text" v-model="e.key" placeholder="关键词用逗号分隔，或正则" />
+                </div>
+                <div class="row"><label style="font-size:12px;">内容</label><textarea v-model="e.content" rows="2"></textarea></div>
+                <div class="row">
+                  <label><input type="checkbox" v-model="e.isRegex" /> 正则</label>
+                  <label><input type="checkbox" v-model="e.alwaysInclude" /> 恒插入</label>
+                  <label><input type="checkbox" v-model="e.enabled" /> 启用</label>
+                  <button class="btn-danger" @click="removeWorldBookEntry(i)">删除</button>
+                </div>
+              </div>
+              <button class="btn-add" @click="addWorldBookEntry">＋ 添加条目</button>
+            </template>
+
+            <template v-if="charTab === 'memory' && editingChar.mode === 'chat'">
+              <div class="memory-status"><span>记忆摘要（可手动编辑）</span></div>
+              <div class="form-group"><textarea v-model="editingChar.memorySummary" rows="6" placeholder="暂无记忆摘要，可手动填写。"></textarea></div>
+            </template>
+
+            <template v-if="charTab === 'storylines'">
+              <div v-for="s in editingChar.storylines" :key="s.id" class="drawer-item">
+                <input type="text" v-model="s.name" style="flex:1;border:none;border-bottom:1px solid #e0e0e0;padding:4px;" />
+                <button class="btn-danger" @click="deleteStoryline(s.id)">删除</button>
+              </div>
+              <button class="btn-add" @click="newStorylineForChar" style="margin-top:10px;">＋ 新建故事线</button>
+            </template>
+          </template>
+        </div>
+        <div class="settings-footer">
+          <button class="btn-cancel" @click="deleteCharacter">删除角色</button>
+          <button class="btn-save" @click="saveCharacter">保存</button>
+        </div>
+      </template>
+    </div>
+
+    <div v-if="fullscreenVisible" class="fullscreen-editor">
+      <div class="editor-header">
+        <span class="editor-title">{{ fullscreenTitle }}</span>
+        <button class="editor-close" @click="closeFullscreen">✕</button>
+      </div>
+      <div class="editor-body">
+        <textarea v-model="fullscreenContent"></textarea>
+      </div>
+      <div class="editor-footer">
+        <button class="btn-cancel-editor" @click="closeFullscreen">取消</button>
+        <button class="btn-confirm" @click="confirmFullscreen">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/store.js"></script>
+  <script src="js/prompt.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
