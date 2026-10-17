@@ -230,6 +230,14 @@
             background: #9b9b9b;
             margin-top: 2px;
             user-select: none;
+            overflow: hidden;
+        }
+
+        .msg-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
         }
 
         .message-wrapper.user .msg-avatar {
