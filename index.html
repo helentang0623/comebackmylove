@@ -64,7 +64,10 @@
       </template>
 
       <div v-if="isTyping" class="typing-indicator">
-        <div class="msg-avatar" style="background:#5f7d9c">AI</div>
+        <div class="msg-avatar" :style="activeChar && activeChar.avatar ? '' : 'background:#5f7d9c'">
+          <img v-if="activeChar && activeChar.avatar" :src="activeChar.avatar" />
+          <span v-else>AI</span>
+        </div>
         <div class="bubble"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
       </div>
 

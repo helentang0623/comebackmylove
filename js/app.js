@@ -129,15 +129,18 @@
       function triggerActiveMessage() {
         if (!apiConfigured.value) { showToastMessage('请先配置 API'); return; }
         if (isProcessing || isSending.value) return;
-        // 主动消息：构建不含历史、带主动指令的系统提示
         const c = activeChar.value;
         if (!c) { showToastMessage('请先创建角色'); return; }
         const sl = activeStoryline.value;
-        const parts = [];
-        parts.push(`【主动指令】你是主动发起对话的一方，请根据角色设定主动说一句话开启话题。`);
-        parts.push(`【格式要求】可以包含动作、心理、环境等描写。`);
-        const system = '请严格遵循以下设定：\n' + parts.join('\n') + '\n' + Prompt.buildSystemPrompt({ character: c, userCard: state.global.userCard, globalNotes: state.global.globalNotes });
-        doRequest(system, [], sl);
+        const entries = Store.worldBookEntries(state, c);
+        const worldHits = Prompt.matchWorldBook(entries, Prompt.recentContext(sl ? sl.messages : [], 8));
+        const system = Prompt.buildSystemPrompt({
+          character: c, userCard: state.global.userCard, globalNotes: state.global.globalNotes,
+          worldBookHits: worldHits,
+        }) + '\n【主动指令】你是主动推进对话的一方：请根据角色设定与已有对话，自然地继续剧情并直接说出下一句话。只输出一段连贯的话，不要分段。';
+        const history = Prompt.buildHistory(sl ? sl.messages : [], state.global.contextLength);
+        const worldHit = { count: worldHits.length, total: entries.filter(e => e.enabled !== false).length };
+        doRequest(system, history, sl, worldHit, false);
       }
 
       async function executeAIChat(bufferMessages) {
@@ -168,7 +171,7 @@
         }
       }
 
-      async function doRequest(system, history, targetSl, worldHit) {
+      async function doRequest(system, history, targetSl, worldHit, split) {
         const cfg = { apiUrl: state.global.apiUrl, apiKey: state.global.apiKey, model: state.global.model, temperature: state.global.temperature, maxTokens: state.global.replyLength };
         const full = [{ role: 'system', content: system }, ...history];
         isSending.value = true;
@@ -182,7 +185,8 @@
           return;
         }
         const meta = { usage: r.usage || null, worldHit: worldHit || { count: 0, total: 0 } };
-        splitReply(r.content).forEach((part, i) => {
+        const parts = (split === false) ? [r.content] : splitReply(r.content);
+        parts.forEach((part, i) => {
           setTimeout(() => addMessage('assistant', part, targetSl, i === 0 ? meta : null), i * 500);
         });
       }

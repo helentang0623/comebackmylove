@@ -670,13 +670,15 @@
         }
 
         /* 开关 */
-        .switch-row {
+        .form-group label.switch-row {
             display: flex;
             align-items: center;
             gap: 10px;
             cursor: pointer;
             font-size: 14px;
             color: #555;
+            font-weight: 400;
+            margin-bottom: 0;
         }
         .switch-row input {
             display: none;
