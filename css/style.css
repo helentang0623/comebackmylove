@@ -324,6 +324,16 @@
             user-select: none;
         }
 
+        .bubble .msg-meta {
+            display: block;
+            text-align: right;
+            font-size: 11px;
+            color: #8a8a8a;
+            margin-top: 4px;
+            letter-spacing: 0.2px;
+            user-select: none;
+        }
+
         .message-wrapper.user .bubble .msg-time {
             color: #6b7a6b;
         }
@@ -657,6 +667,46 @@
 
         .expand-wrap .expand-btn:active {
             background: rgba(0, 0, 0, 0.12);
+        }
+
+        /* 开关 */
+        .switch-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #555;
+        }
+        .switch-row input {
+            display: none;
+        }
+        .switch-row .switch-track {
+            width: 44px;
+            height: 24px;
+            background: #ccc;
+            border-radius: 12px;
+            position: relative;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }
+        .switch-row .switch-track::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: #fff;
+            border-radius: 50%;
+            transition: left 0.2s;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        .switch-row input:checked + .switch-track {
+            background: #075e54;
+        }
+        .switch-row input:checked + .switch-track::after {
+            left: 22px;
         }
 
         .form-group .input-row .btn-fetch {

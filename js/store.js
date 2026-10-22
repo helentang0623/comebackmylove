@@ -21,6 +21,8 @@
         apiUrl: '', apiKey: '', model: '',
         temperature: 0.7,
         replyLength: 500,
+        contextLength: 20,
+        showTokenUsage: false,
         globalNotes: '',
         worldBooks: [],
         userCard: { name: '', basic: '', personality: '', background: '', avatar: '' },
@@ -43,14 +45,14 @@
     };
   }
 
-  function newMessage(role, content, state) {
+  function newMessage(role, content, state, meta) {
     const now = Date.now();
     return {
       id: ++state.idCounter,
       role: role,
       time: timeStr(now),
       timestamp: now,
-      swipes: [{ id: uid(), content: content || '', time: timeStr(now), timestamp: now }],
+      swipes: [Object.assign({ id: uid(), content: content || '', time: timeStr(now), timestamp: now }, meta || {})],
       swipeIndex: 0,
     };
   }
@@ -74,9 +76,9 @@
     return (wb && wb.entries) || [];
   }
 
-  function addSwipe(msg, content) {
+  function addSwipe(msg, content, meta) {
     const now = Date.now();
-    msg.swipes.push({ id: uid(), content: content || '', time: timeStr(now), timestamp: now });
+    msg.swipes.push(Object.assign({ id: uid(), content: content || '', time: timeStr(now), timestamp: now }, meta || {}));
     msg.swipeIndex = msg.swipes.length - 1;
     return msg;
   }
@@ -92,6 +94,11 @@
     const s = msg.swipes && msg.swipes[msg.swipeIndex];
     if (s) return s.content;
     return (typeof msg.content === 'string') ? msg.content : '';
+  }
+
+  function currentSwipe(msg) {
+    if (msg && Array.isArray(msg.swipes) && msg.swipes.length) return msg.swipes[msg.swipeIndex] || msg.swipes[0];
+    return null;
   }
 
   function deleteMessage(storyline, msgId) {
@@ -127,6 +134,8 @@
     s.global = Object.assign(defaultGlobal, rawGlobal);
     s.global.userCard = Object.assign(defaultUserCard, rawGlobal.userCard || {});
     if (!Array.isArray(s.global.worldBooks)) s.global.worldBooks = [];
+    if (typeof s.global.contextLength !== 'number' || s.global.contextLength < 2) s.global.contextLength = 20;
+    if (typeof s.global.showTokenUsage !== 'boolean') s.global.showTokenUsage = false;
     s.global.worldBooks.forEach(wb => { if (!Array.isArray(wb.entries)) wb.entries = []; });
     if (!Array.isArray(s.characters)) s.characters = [];
     s.characters.forEach(c => {
@@ -178,7 +187,7 @@
 
   return {
     KEY, VERSION, createDefaultState, newCharacter, newMessage, newStoryline,
-    activeCharacter, activeStoryline, worldBookEntries, addSwipe, setSwipeIndex, currentContent,
+    activeCharacter, activeStoryline, worldBookEntries, addSwipe, setSwipeIndex, currentContent, currentSwipe,
     deleteMessage, deleteAfter, branchFrom,
     loadState, saveState, normalize, exportJSON, importJSON, timeStr,
   };

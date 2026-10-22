@@ -42,10 +42,10 @@
         return sl ? sl.messages : [];
       });
 
-      function addMessage(role, content, sl) {
+      function addMessage(role, content, sl, meta) {
         const target = sl || activeStoryline.value;
         if (!target) return null;
-        const m = Store.newMessage(role, content, state);
+        const m = Store.newMessage(role, content, state, meta);
         target.messages.push(m);
         scrollToBottom();
         return m;
@@ -147,13 +147,15 @@
           const c = first.c || activeChar.value;
           if (!c) { showToastMessage('请先创建角色'); return; }
           const sl = first.sl || activeStoryline.value;
-          const worldHits = Prompt.matchWorldBook(Store.worldBookEntries(state, c), Prompt.recentContext(sl ? sl.messages : [], 8));
+          const entries = Store.worldBookEntries(state, c);
+          const worldHits = Prompt.matchWorldBook(entries, Prompt.recentContext(sl ? sl.messages : [], 8));
           const system = Prompt.buildSystemPrompt({
             character: c, userCard: state.global.userCard, globalNotes: state.global.globalNotes,
             worldBookHits: worldHits,
           });
-          const history = Prompt.buildHistory(sl ? sl.messages : [], 20);
-          await doRequest(system, history, sl);
+          const history = Prompt.buildHistory(sl ? sl.messages : [], state.global.contextLength);
+          const worldHit = { count: worldHits.length, total: entries.filter(e => e.enabled !== false).length };
+          await doRequest(system, history, sl, worldHit);
         } finally {
           isTyping.value = false;
           isProcessing = false;
@@ -166,7 +168,7 @@
         }
       }
 
-      async function doRequest(system, history, targetSl) {
+      async function doRequest(system, history, targetSl, worldHit) {
         const cfg = { apiUrl: state.global.apiUrl, apiKey: state.global.apiKey, model: state.global.model, temperature: state.global.temperature, maxTokens: state.global.replyLength };
         const full = [{ role: 'system', content: system }, ...history];
         isSending.value = true;
@@ -179,8 +181,9 @@
           showToastMessage(r.lastError ? r.lastError.message : '未回复');
           return;
         }
+        const meta = { usage: r.usage || null, worldHit: worldHit || { count: 0, total: 0 } };
         splitReply(r.content).forEach((part, i) => {
-          setTimeout(() => addMessage('assistant', part, targetSl), i * 500);
+          setTimeout(() => addMessage('assistant', part, targetSl, i === 0 ? meta : null), i * 500);
         });
       }
 
@@ -226,6 +229,19 @@
       function isLastMessage(m) {
         const sl = activeStoryline.value;
         return !!(sl && m && sl.messages.length && sl.messages[sl.messages.length - 1].id === m.id);
+      }
+      function msgMeta(item) {
+        if (!item || item.role !== 'assistant') return '';
+        const s = Store.currentSwipe(item);
+        if (!s) return '';
+        const parts = [];
+        if (s.usage) {
+          const u = s.usage;
+          const total = (typeof u.total_tokens === 'number') ? u.total_tokens : ((u.prompt_tokens || 0) + (u.completion_tokens || 0));
+          if (total) parts.push('token ' + total);
+        }
+        if (s.worldHit && s.worldHit.total > 0) parts.push('命中 ' + s.worldHit.count + '/' + s.worldHit.total);
+        return parts.join(' · ');
       }
       const canEditTarget = computed(() => {
         const m = targetMessage.value;
@@ -296,11 +312,14 @@
         const c = activeChar.value;
         if (!c || !sl) return;
         const historyMsgs = targetMsg ? sl.messages.filter(m => m.id !== targetMsg.id) : sl.messages;
-        const history = Prompt.buildHistory(historyMsgs, 20);
+        const entries = Store.worldBookEntries(state, c);
+        const worldHits = Prompt.matchWorldBook(entries, Prompt.recentContext(historyMsgs, 8));
+        const history = Prompt.buildHistory(historyMsgs, state.global.contextLength);
         const system = Prompt.buildSystemPrompt({
           character: c, userCard: state.global.userCard, globalNotes: state.global.globalNotes,
-          worldBookHits: Prompt.matchWorldBook(Store.worldBookEntries(state, c), Prompt.recentContext(historyMsgs, 8)),
+          worldBookHits: worldHits,
         });
+        const worldHit = { count: worldHits.length, total: entries.filter(e => e.enabled !== false).length };
         const cfg = { apiUrl: state.global.apiUrl, apiKey: state.global.apiKey, model: state.global.model, temperature: state.global.temperature, maxTokens: state.global.replyLength };
         if (targetMsg) regeneratingId.value = targetMsg.id;
         let r;
@@ -310,8 +329,9 @@
           if (targetMsg) regeneratingId.value = null;
         }
         if (!r.ok) { showToastMessage('重新回复失败'); return; }
-        if (targetMsg) Store.addSwipe(targetMsg, r.content);
-        else addMessage('assistant', r.content, sl);
+        const meta = { usage: r.usage || null, worldHit };
+        if (targetMsg) Store.addSwipe(targetMsg, r.content, meta);
+        else addMessage('assistant', r.content, sl, meta);
       }
 
       function deleteMessage() {
@@ -489,7 +509,7 @@
         showMessageMenu, menuPosition, targetMessage, editingMessageId, editingContent,
         openMessageMenu, closeMessageMenu, startEdit, saveEdit, cancelEdit,
         reReply, deleteMessage, deleteAfterThis, branchFromHere,
-        canEditTarget, canReReplyTarget, isLastMessage, regeneratingId,
+        canEditTarget, canReReplyTarget, isLastMessage, regeneratingId, msgMeta,
         drawerShowAllStorylines, visibleStorylines, editingStorylineId, renameStoryline,
         modelOptions, isFetchingModels, testStatus, testDetail, isTesting,
         saveApi, fetchModels, runTest, saveGlobal, saveUser,

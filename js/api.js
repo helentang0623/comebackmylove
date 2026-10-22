@@ -35,7 +35,7 @@
         else {
           const data = await resp.json();
           const content = extractContent(data);
-          if (content) return { ok: true, content: content, attempts: attempt };
+          if (content) return { ok: true, content: content, attempts: attempt, usage: data.usage || null };
           lastError = new Error('空回复');
         }
       } catch (err) { lastError = err; }

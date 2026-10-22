@@ -51,6 +51,7 @@
                   </div>
                 </div>
                 <div v-else class="msg-text">{{ Store.currentContent(item) }}</div>
+                <div v-if="editingMessageId !== item.id && item.role === 'assistant' && state.global.showTokenUsage && msgMeta(item)" class="msg-meta">{{ msgMeta(item) }}</div>
               </div>
             </div>
             <div v-if="item.swipes.length > 1 && isLastMessage(item)" class="swipe-control">
@@ -164,6 +165,12 @@
           </div>
           <div class="form-group"><label>回复长度 <span class="label-hint">({{ state.global.replyLength }})</span></label>
             <input type="range" min="50" max="2000" step="50" v-model.number="state.global.replyLength" style="width:100%;" />
+          </div>
+          <div class="form-group"><label>上下文长度 <span class="label-hint">({{ state.global.contextLength }} 条消息)</span></label>
+            <input type="range" min="2" max="50" step="1" v-model.number="state.global.contextLength" style="width:100%;" />
+          </div>
+          <div class="form-group"><label>显示 token 与命中率</label>
+            <label class="switch-row"><input type="checkbox" v-model="state.global.showTokenUsage" /><span class="switch-track"></span><span>开启后每条 AI 回复下方显示 token 用量与世界书命中率</span></label>
           </div>
           <div class="form-group"><label>全局注意事项</label>
             <div class="expand-wrap"><textarea v-model="state.global.globalNotes" rows="4" placeholder="例如：必须用中文回复。"></textarea><button class="expand-btn" @click="openFullscreenFor(state.global, 'globalNotes', '全局注意事项')">⤢</button></div>
