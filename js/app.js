@@ -97,6 +97,68 @@
       const visibleStorylines = computed(() => drawerShowAllStorylines.value ? sortedStorylines.value : sortedStorylines.value.slice(0, 2));
       function renameStoryline(s) { editingStorylineId.value = null; if (s && s.name) s.name = s.name.trim(); }
 
+      // —— 故事线三点菜单（改名 / 删除）——
+      const showStorylineMenu = ref(false);
+      const storylineMenuPos = ref({ x: 0, y: 0 });
+      const storylineMenuTarget = ref(null);
+      function openStorylineMenu(event, s) {
+        event.preventDefault();
+        storylineMenuTarget.value = s;
+        const btn = event.currentTarget;
+        const rect = btn.getBoundingClientRect();
+        const menuW = 120, menuH = 96;
+        let left = rect.left - menuW;
+        if (left < 10) left = rect.right + 4;
+        if (left + menuW > window.innerWidth - 10) left = window.innerWidth - menuW - 10;
+        let top = rect.top;
+        if (top + menuH > window.innerHeight - 10) top = window.innerHeight - menuH - 10;
+        if (top < 10) top = 10;
+        storylineMenuPos.value = { x: left, y: top };
+        showStorylineMenu.value = true;
+        nextTick(() => { document.addEventListener('click', closeStorylineMenuOnce); });
+      }
+      function closeStorylineMenuOnce(e) {
+        const el = document.querySelector('.storyline-menu');
+        if (el && el.contains(e.target)) return;
+        closeStorylineMenu();
+      }
+      function closeStorylineMenu() {
+        showStorylineMenu.value = false;
+        storylineMenuTarget.value = null;
+        document.removeEventListener('click', closeStorylineMenuOnce);
+      }
+      function renameStorylineFromMenu() {
+        const s = storylineMenuTarget.value;
+        closeStorylineMenu();
+        if (s) editingStorylineId.value = s.id;
+      }
+      function deleteStorylineFromMenu() {
+        const s = storylineMenuTarget.value;
+        closeStorylineMenu();
+        deleteStoryline(s);
+      }
+      function deleteStoryline(s) {
+        if (!s) return;
+        const c = activeChar.value;
+        if (!c) return;
+        const i = c.storylines.findIndex(x => x.id === s.id);
+        if (i === -1) return;
+        c.storylines.splice(i, 1);
+        if (state.activeStorylineId === s.id) {
+          if (c.storylines.length) {
+            state.activeStorylineId = c.storylines[0].id;
+          } else {
+            const sl = Store.newStoryline('新故事线');
+            if (c.greeting && c.greeting.trim()) sl.messages.push(Store.newMessage('assistant', c.greeting.trim(), state));
+            c.storylines.push(sl);
+            state.activeStorylineId = sl.id;
+          }
+        }
+        drawerShowAllStorylines.value = false;
+        editingStorylineId.value = null;
+        scrollToBottom();
+      }
+
       // —— 发送 ——
       let isProcessing = false;
       let pendingMessages = [];
@@ -244,7 +306,7 @@
           const total = (typeof u.total_tokens === 'number') ? u.total_tokens : ((u.prompt_tokens || 0) + (u.completion_tokens || 0));
           if (total) parts.push('token ' + total);
         }
-        if (s.worldHit && s.worldHit.total > 0) parts.push('命中 ' + s.worldHit.count + '/' + s.worldHit.total);
+        if (s.worldHit && s.worldHit.total > 0) parts.push('命中率 ' + Math.round(s.worldHit.count / s.worldHit.total * 100) + '%');
         return parts.join(' · ');
       }
       const canEditTarget = computed(() => {
@@ -515,6 +577,7 @@
         reReply, deleteMessage, deleteAfterThis, branchFromHere,
         canEditTarget, canReReplyTarget, isLastMessage, regeneratingId, msgMeta,
         drawerShowAllStorylines, visibleStorylines, editingStorylineId, renameStoryline,
+        showStorylineMenu, storylineMenuPos, openStorylineMenu, renameStorylineFromMenu, deleteStorylineFromMenu, deleteStoryline,
         modelOptions, isFetchingModels, testStatus, testDetail, isTesting,
         saveApi, fetchModels, runTest, saveGlobal, saveUser,
         uploadUserAvatar, removeUserAvatar, exportData, importData,
