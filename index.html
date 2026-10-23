@@ -84,6 +84,7 @@
     </div>
 
     <div v-if="showMessageMenu" class="message-menu" :style="{ left: menuPosition.x + 'px', top: menuPosition.y + 'px' }" @click.stop>
+      <div class="menu-item" @click="copyMessage">复制</div>
       <div class="menu-item" v-if="canEditTarget" @click="startEdit(targetMessage)">编辑</div>
       <div class="menu-item" v-if="canReReplyTarget" @click="reReply">重新回复</div>
       <div class="menu-item" @click="branchFromHere">从此处开始新聊天</div>
@@ -91,7 +92,7 @@
       <div class="menu-item" @click="deleteMessage">删除</div>
     </div>
     <div v-if="showStorylineMenu" class="storyline-menu" :style="{ left: storylineMenuPos.x + 'px', top: storylineMenuPos.y + 'px' }" @click.stop>
-      <div class="menu-item" @click="renameStorylineFromMenu">改名</div>
+      <div class="menu-item" @click="renameStorylineFromMenu">编辑</div>
       <div class="menu-item danger" @click="deleteStorylineFromMenu">删除</div>
     </div>
     <div v-if="showToast" class="toast">{{ toastMessage }}</div>

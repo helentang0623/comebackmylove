@@ -162,9 +162,6 @@
       // —— 发送 ——
       let isProcessing = false;
       let pendingMessages = [];
-      const messageBuffer = ref([]);
-      let sendTimer = null;
-      const SEND_DELAY = 5000;
 
       function sendMessage() {
         const text = inputMessage.value.trim();
@@ -175,14 +172,7 @@
           inputMessage.value = '';
           autoResizeTextarea();
           if (isProcessing) { pendingMessages.push({ text, sl, c }); return; }
-          messageBuffer.value.push({ text, sl, c });
-          clearTimeout(sendTimer);
-          sendTimer = setTimeout(() => {
-            const copy = [...messageBuffer.value];
-            messageBuffer.value = [];
-            sendTimer = null;
-            executeAIChat(copy);
-          }, SEND_DELAY);
+          executeAIChat([{ text, sl, c }]);
           return;
         }
         triggerActiveMessage();
@@ -226,9 +216,7 @@
           isProcessing = false;
           if (pendingMessages.length) {
             const copy = [...pendingMessages]; pendingMessages = [];
-            messageBuffer.value = copy;
-            clearTimeout(sendTimer);
-            sendTimer = setTimeout(() => { const c = [...messageBuffer.value]; messageBuffer.value = []; executeAIChat(c); }, SEND_DELAY);
+            executeAIChat(copy);
           }
         }
       }
@@ -398,6 +386,30 @@
         const meta = { usage: r.usage || null, worldHit };
         if (targetMsg) Store.addSwipe(targetMsg, r.content, meta);
         else addMessage('assistant', r.content, sl, meta);
+      }
+
+      function copyMessage() {
+        const msg = targetMessage.value;
+        closeMessageMenu();
+        if (!msg) return;
+        const text = Store.currentContent(msg) || '';
+        const done = () => showToastMessage('已复制');
+        const fail = () => showToastMessage('复制失败');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, fail);
+        } else {
+          try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            done();
+          } catch (e) { fail(); }
+        }
       }
 
       function deleteMessage() {
@@ -573,7 +585,7 @@
         scrollToBottom, onChatScroll,
         showToast, toastMessage, showToastMessage,
         showMessageMenu, menuPosition, targetMessage, editingMessageId, editingContent,
-        openMessageMenu, closeMessageMenu, startEdit, saveEdit, cancelEdit,
+        openMessageMenu, closeMessageMenu, startEdit, saveEdit, cancelEdit, copyMessage,
         reReply, deleteMessage, deleteAfterThis, branchFromHere,
         canEditTarget, canReReplyTarget, isLastMessage, regeneratingId, msgMeta,
         drawerShowAllStorylines, visibleStorylines, editingStorylineId, renameStoryline,
