@@ -191,6 +191,8 @@
           worldBookHits: worldHits, memory: (sl && sl.summary) || '',
         }) + '\n【主动指令】你是主动推进对话的一方：请根据角色设定与已有对话，自然地继续剧情并直接说出下一句话。只输出一段连贯的话，不要分段。';
         const history = Prompt.buildHistory(sl ? sl.messages : [], state.global.contextLength);
+        // 续写时补一条不落盘的 user 占位：恢复 user/assistant 交替，给模型一个“接着上文、别跑题”的锚点
+        history.push({ role: 'user', content: '（请继续：紧接上一句话自然往下说，保持当前话题、语气和节奏，不要开新话题、不要复述。）' });
         const worldHit = { count: worldHits.length, total: entries.filter(e => e.enabled !== false).length };
         doRequest(system, history, sl, worldHit, false);
         summarizeOverflow(sl, c);
