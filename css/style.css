@@ -22,7 +22,7 @@
         #app {
             display: flex;
             flex-direction: column;
-            height: 100dvh; /* 使用动态视口高度，更好适应键盘弹出 */
+            height: var(--app-height, 100dvh); /* 动态视口高度：JS 用 visualViewport 同步，键盘弹出时整体上移 */
             max-width: 480px;
             margin: 0 auto;
             background-color: #ffffff;

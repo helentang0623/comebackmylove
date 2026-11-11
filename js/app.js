@@ -1,6 +1,6 @@
 // js/app.js
 (function () {
-  const { createApp, reactive, ref, computed, watch, nextTick } = Vue;
+  const { createApp, reactive, ref, computed, watch, nextTick, onMounted } = Vue;
 
   createApp({
     setup() {
@@ -278,10 +278,44 @@
       }
 
       // —— 工具 ——
-      function scrollToBottom() {
-        nextTick(() => { const el = chatContainer.value; if (el) el.scrollTop = el.scrollHeight; });
+      function scrollToBottom(instant) {
+        nextTick(() => {
+          const el = chatContainer.value;
+          if (!el) return;
+          if (instant) {
+            const prev = el.style.scrollBehavior;
+            el.style.scrollBehavior = 'auto';
+            el.scrollTop = el.scrollHeight;
+            el.style.scrollBehavior = prev;
+          } else {
+            el.scrollTop = el.scrollHeight;
+          }
+        });
       }
       function onChatScroll() {}
+
+      // —— 视口高度同步：键盘弹出时让消息区与输入框一起上移 ——
+      let prevVvHeight = 0;
+      function syncViewportHeight() {
+        const vv = window.visualViewport;
+        const h = (vv && typeof vv.height === 'number') ? vv.height : 0;
+        document.documentElement.style.setProperty('--app-height', h ? (h + 'px') : '100dvh');
+        if (h && prevVvHeight && h < prevVvHeight - 40) {
+          scrollToBottom(true); // 键盘弹出：重锚到底部，避免最新消息被键盘遮挡
+        }
+        if (h) prevVvHeight = h;
+      }
+      onMounted(() => {
+        syncViewportHeight();
+        scrollToBottom(true);
+        setTimeout(() => scrollToBottom(true), 200); // 头像等资源加载后校正一次
+        const vv = window.visualViewport;
+        if (vv) {
+          vv.addEventListener('resize', syncViewportHeight);
+          vv.addEventListener('scroll', syncViewportHeight);
+        }
+        window.addEventListener('resize', syncViewportHeight);
+      });
       let toastTimer = null; const toastMessage = ref(''); const showToast = ref(false);
       function showToastMessage(msg) {
         clearTimeout(toastTimer); toastMessage.value = msg; showToast.value = true;
