@@ -58,7 +58,7 @@
   }
 
   function newStoryline(name) {
-    return { id: uid(), name: name || '新故事线', createdAt: Date.now(), messages: [] };
+    return { id: uid(), name: name || '新故事线', createdAt: Date.now(), messages: [], summary: '', summarizedCount: 0 };
   }
 
   function activeCharacter(state) {
@@ -103,22 +103,35 @@
 
   function deleteMessage(storyline, msgId) {
     const i = storyline.messages.findIndex(m => m.id === msgId);
-    if (i !== -1) storyline.messages.splice(i, 1);
+    if (i !== -1) {
+      storyline.messages.splice(i, 1);
+      if (typeof storyline.summarizedCount === 'number' && i < storyline.summarizedCount) {
+        storyline.summary = '';
+        storyline.summarizedCount = 0;
+      }
+    }
     return storyline;
   }
 
   function deleteAfter(storyline, msgId) {
     const i = storyline.messages.findIndex(m => m.id === msgId);
     if (i !== -1) storyline.messages = storyline.messages.slice(0, i + 1);
+    if (typeof storyline.summarizedCount === 'number' && storyline.summarizedCount > storyline.messages.length) {
+      storyline.summary = '';
+      storyline.summarizedCount = 0;
+    }
     return storyline;
   }
 
   function branchFrom(storyline, msgId) {
     const i = storyline.messages.findIndex(m => m.id === msgId);
     const end = (i === -1) ? storyline.messages.length : i + 1;
+    const summarizedCount = (typeof storyline.summarizedCount === 'number') ? storyline.summarizedCount : 0;
     return {
       id: uid(), name: '新故事线', createdAt: Date.now(),
       messages: JSON.parse(JSON.stringify(storyline.messages.slice(0, end))),
+      summary: (summarizedCount <= end) ? (storyline.summary || '') : '',
+      summarizedCount: (summarizedCount <= end) ? summarizedCount : 0,
     };
   }
 
@@ -150,6 +163,8 @@
       if (!Array.isArray(c.storylines)) c.storylines = [];
       c.storylines.forEach(sl => {
         if (!Array.isArray(sl.messages)) sl.messages = [];
+        if (typeof sl.summary !== 'string') sl.summary = '';
+        if (typeof sl.summarizedCount !== 'number' || sl.summarizedCount < 0) sl.summarizedCount = 0;
         sl.messages.forEach(m => {
           if (!Array.isArray(m.swipes)) {
             m.swipes = [{ id: uid(), content: m.content || '', time: m.time, timestamp: m.timestamp }];

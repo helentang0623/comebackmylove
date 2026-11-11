@@ -63,6 +63,7 @@
     const c = opts.character || {};
     const parts = [];
     if (opts.globalNotes) parts.push(`【全局注意事项】${opts.globalNotes}`);
+    if (opts.memory && String(opts.memory).trim()) parts.push(`【长期记忆】${String(opts.memory).trim()}`);
     const role = roleCardText(c.roleCard, c.name);
     if (role.trim()) parts.push(`【AI人设】${role}`);
     const user = userCardText(opts.userCard);
@@ -75,7 +76,8 @@
     const mm = String(now.getMinutes()).padStart(2, '0');
     parts.push(`【当前时间】${timeGreeting(now)} ${hh}:${mm}（用户所在时区）。`);
     parts.push(`【表达要求】像真人一样自然地回应，不要写成作文或总结：
-- 内容：只以角色身份说话和思考，不替用户写、不复述用户原话；情绪用动作、语气、细节来“演”，不要直接写“我很生气/我很高兴”。
+- 风格随上文切换：先判断当前是“纯聊天”还是“走剧情”。上文是纯对话（短句口语、没有动作/心理/环境描写）时，只回对话、不加描写；上文带动作/心理/环境描写、在走剧情时，就带同样风格的描写继续推进。
+- 内容：只以角色身份说话和思考，不替用户写、不复述用户原话；走剧情时情绪用动作、语气、细节来“演”，不要直接写“我很生气/我很高兴”。
 - 句式：长短句交错，避免每句一样长、每段一样满；不要每次都用同一套开头或结尾，不要总在结尾反问一句，也不要每句都以“你/我”开头。
 - 用词：口语化、贴合角色说话风格，避免书面腔、翻译腔、空洞形容词和陈词滥调。
 - 节奏：一次只推进当前这一步，别把后面的可能性都铺陈出来。`);
@@ -89,5 +91,11 @@
       .map(m => ({ role: m.role, content: Store.currentContent(m) }));
   }
 
-  return { roleCardText, userCardText, recentContext, matchWorldBook, timeGreeting, buildSystemPrompt, buildHistory };
+  function buildSummarizeMessages(previousSummary, overflowText) {
+    const sys = '你是记忆整理助手。请把下面的对话压缩成一段长期记忆要点，供后续对话参考。只保留：用户与角色的喜好/习惯/口头禅、重要剧情、人物关系变化、约定承诺、关键事实；寒暄、闲聊、无关细节一律丢弃。用简洁的中文要点写，控制在400字以内，不要复述原话，不要写“用户说/角色说”这类前缀。';
+    const user = (previousSummary && previousSummary.trim() ? '已有记忆：\n' + previousSummary.trim() + '\n\n' : '') + '新增对话：\n' + (overflowText || '');
+    return [{ role: 'system', content: sys }, { role: 'user', content: user }];
+  }
+
+  return { roleCardText, userCardText, recentContext, matchWorldBook, timeGreeting, buildSystemPrompt, buildHistory, buildSummarizeMessages };
 });

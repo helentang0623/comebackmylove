@@ -188,11 +188,12 @@
         const worldHits = Prompt.matchWorldBook(entries, Prompt.recentContext(sl ? sl.messages : [], 8));
         const system = Prompt.buildSystemPrompt({
           character: c, userCard: state.global.userCard, globalNotes: state.global.globalNotes,
-          worldBookHits: worldHits,
+          worldBookHits: worldHits, memory: (sl && sl.summary) || '',
         }) + '\n【主动指令】你是主动推进对话的一方：请根据角色设定与已有对话，自然地继续剧情并直接说出下一句话。只输出一段连贯的话，不要分段。';
         const history = Prompt.buildHistory(sl ? sl.messages : [], state.global.contextLength);
         const worldHit = { count: worldHits.length, total: entries.filter(e => e.enabled !== false).length };
         doRequest(system, history, sl, worldHit, false);
+        summarizeOverflow(sl, c);
       }
 
       async function executeAIChat(bufferMessages) {
@@ -206,11 +207,12 @@
           const worldHits = Prompt.matchWorldBook(entries, Prompt.recentContext(sl ? sl.messages : [], 8));
           const system = Prompt.buildSystemPrompt({
             character: c, userCard: state.global.userCard, globalNotes: state.global.globalNotes,
-            worldBookHits: worldHits,
+            worldBookHits: worldHits, memory: (sl && sl.summary) || '',
           });
           const history = Prompt.buildHistory(sl ? sl.messages : [], state.global.contextLength);
           const worldHit = { count: worldHits.length, total: entries.filter(e => e.enabled !== false).length };
           await doRequest(system, history, sl, worldHit);
+          summarizeOverflow(sl, c);
         } finally {
           isTyping.value = false;
           isProcessing = false;
@@ -246,6 +248,33 @@
         if (parts.length <= 1) parts = reply.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
         if (parts.length <= 1) return [reply];
         return parts;
+      }
+
+      // —— 长期记忆压缩：把窗口外的旧消息滚动总结成摘要 ——
+      let summarizingStorylineId = null;
+      async function summarizeOverflow(sl, c) {
+        if (!sl || !c) return;
+        if (!apiConfigured.value) return;
+        if (summarizingStorylineId === sl.id) return;
+        const limit = state.global.contextLength || 20;
+        const overflowEnd = sl.messages.length - limit;
+        if (overflowEnd <= 0) return;
+        const start = (typeof sl.summarizedCount === 'number') ? sl.summarizedCount : 0;
+        if (start >= overflowEnd) return;
+        const toSummarize = sl.messages.slice(start, overflowEnd);
+        if (toSummarize.length < 10) return; // 攒够 10 条再压
+        summarizingStorylineId = sl.id;
+        try {
+          const overflowText = toSummarize.map(m => (m.role === 'user' ? '用户' : (c.name || '角色')) + '：' + Store.currentContent(m)).join('\n');
+          const messages = Prompt.buildSummarizeMessages(sl.summary, overflowText);
+          const cfg = { apiUrl: state.global.apiUrl, apiKey: state.global.apiKey, model: state.global.model, temperature: 0.3, maxTokens: 800 };
+          const r = await Api.requestChat(cfg, messages);
+          if (r.ok && r.content && r.content.trim()) {
+            sl.summary = r.content.trim();
+            sl.summarizedCount = overflowEnd;
+          }
+        } catch (e) { /* 压缩失败静默，下次再试 */ }
+        finally { summarizingStorylineId = null; }
       }
 
       // —— 工具 ——
@@ -371,7 +400,7 @@
         const history = Prompt.buildHistory(historyMsgs, state.global.contextLength);
         const system = Prompt.buildSystemPrompt({
           character: c, userCard: state.global.userCard, globalNotes: state.global.globalNotes,
-          worldBookHits: worldHits,
+          worldBookHits: worldHits, memory: (sl && sl.summary) || '',
         });
         const worldHit = { count: worldHits.length, total: entries.filter(e => e.enabled !== false).length };
         const cfg = { apiUrl: state.global.apiUrl, apiKey: state.global.apiKey, model: state.global.model, temperature: state.global.temperature, maxTokens: state.global.replyLength };
